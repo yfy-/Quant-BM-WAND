@@ -1,8 +1,10 @@
-
-
 #ifndef INVIDX_HPP
 #define INVIDX_HPP
 
+#include <unordered_map>
+#include <chrono>
+#include <iostream>
+#include <string>
 #include "query.hpp"
 #include "sdsl/config.hpp"
 #include "sdsl/int_vector.hpp"
@@ -30,7 +32,7 @@ private:
     double f_t;
     plist_wrapper() = default;
     plist_wrapper(plist_type& pl) {
-      f_t = pl.size(); 
+      f_t = pl.size();
       cur = pl.begin();
       end = pl.end();
       list_max_score = pl.list_max_score();
@@ -39,34 +41,38 @@ private:
 private:
   std::vector<plist_type> m_postings_lists;
   std::unique_ptr<ranker_type> ranker;
+  std::unordered_map<std::string, double> cache;
+  bool dyn_cache;
 
 public:
   idx_invfile() = default;
   double m_F;
   double m_conjunctive_max;
 
-  // Search constructor 
-  idx_invfile(std::string& postings_file, const double F) : m_F(F)
+  // Search constructor
+  idx_invfile(std::string& postings_file, const double F) :
+      m_F(F)
   {
-    
-    std:: ifstream ifs(postings_file);
+
+    std::ifstream ifs(postings_file);
     if (ifs.is_open() != true){
       std::cerr << "Could not open file: " <<  postings_file << std::endl;
       exit(EXIT_FAILURE);
     }
-    size_t num_lists; 
+    size_t num_lists;
     read_member(num_lists,ifs);
     m_postings_lists.resize(num_lists);
     for (size_t i=0;i<num_lists;i++) {
       m_postings_lists[i].load(ifs);
     }
+    dyn_cache = false;
   }
 
-  auto serialize(std::ostream& out, 
-                 sdsl::structure_tree_node* v=NULL, 
+  auto serialize(std::ostream& out,
+                 sdsl::structure_tree_node* v=NULL,
                  std::string name="") const -> size_type {
 
-    structure_tree_node* child = structure_tree::add_child(v, name, 
+    structure_tree_node* child = structure_tree::add_child(v, name,
                                  util::class_name(*this));
     size_type written_bytes = 0;
     size_t num_lists = m_postings_lists.size();
@@ -89,12 +95,37 @@ public:
     }
   }
 
+  void load_cache(const std::string cache_file) {
+    std::ifstream cache_fs(cache_file);
+
+    if (cache_fs.is_open()) {
+      std::string cache_line;
+
+      while (std::getline(cache_fs, cache_line)) {
+        size_t delim_pos = cache_line.find(";");
+        std::string query = cache_line.substr(0, delim_pos);
+        double threshold = std::stod(cache_line.substr(delim_pos + 1));
+        cache[query] = threshold;
+      }
+    } else {
+      std::cerr << "Cannot load cache with file " << cache_file << "\n";
+    }
+  }
+
+  void set_dyn_cache(bool enable) {
+    dyn_cache = enable;
+  }
+
+  void reset_cache() {
+    cache.clear();
+  }
+
   // Finds the posting with the least number of items remaining other than
   // the current ID
   typename std::vector<plist_wrapper*>::iterator
   find_shortest_list(std::vector<plist_wrapper*>& postings_lists,
                      const typename std::vector<plist_wrapper*>::iterator& end,
-                     const uint64_t id) 
+                     const uint64_t id)
   {
     auto itr = postings_lists.begin();
     if (itr != end) {
@@ -147,7 +178,7 @@ public:
     // bubble it down!
     auto next = smallest_itr + 1;
     auto list_end = postings_lists.end();
-    while (next != list_end && 
+    while (next != list_end &&
            (*smallest_itr)->cur.docid() > (*next)->cur.docid()) {
       std::swap(*smallest_itr,*next);
       smallest_itr = next;
@@ -157,7 +188,7 @@ public:
 
   // BMW-Forwarding: Forwards beyond current block config
   void forward_lists_bmw(std::vector<plist_wrapper*>& postings_lists,
-                const typename std::vector<plist_wrapper*>::iterator& 
+                const typename std::vector<plist_wrapper*>::iterator&
                 pivot_list, const uint64_t docid) {
 
     // Find the shortest list
@@ -186,10 +217,10 @@ public:
     // Corner case check
     if (candidate_id < docid)
       candidate_id = docid + 1;
-   
+
     // Advance the smallest list to our new candidate
     (*smallest_iter)->cur.skip_to_id(candidate_id);
-    
+
     // If the smallest list is finished, reorder the lists
     if ((*smallest_iter)->cur == (*smallest_iter)->end) {
       sort_list_by_id(postings_lists);
@@ -198,7 +229,7 @@ public:
 
     // Bubble it down.
     auto next = smallest_iter + 1;
-    while (next != list_end && 
+    while (next != list_end &&
           (*smallest_iter)->cur.docid() > (*next)->cur.docid()) {
       std::swap(*smallest_iter, *next);
       smallest_iter = next;
@@ -209,11 +240,11 @@ public:
   // Block-Max specific candidate test. Tests that the current pivot's block-max
   // scores still exceed the heap threshold. Returns the block-max score sum and
   // a boolean (whether we should indeed score, or not)
-  const std::pair<bool, double> 
+  const std::pair<bool, double>
   potential_candidate(std::vector<plist_wrapper*>& postings_lists,
-                      const typename std::vector<plist_wrapper*>::iterator& 
-                      pivot_list, const double threshold, 
-                      const uint64_t doc_id){
+                      const typename std::vector<plist_wrapper*>::iterator&
+                      pivot_list, const double threshold,
+                      const uint64_t doc_id, bool heap_full = false){
 
     auto iter = postings_lists.begin();
     double block_max_score = (*pivot_list)->cur.block_max(); // pivot blockmax
@@ -226,7 +257,8 @@ public:
     }
 
     // block-max test
-    if (block_max_score > threshold) {
+    if ((heap_full && block_max_score > threshold) ||
+        (!heap_full && block_max_score >= threshold)) {
       return {true,block_max_score};
     }
     return {false,block_max_score};
@@ -246,7 +278,7 @@ public:
   // For disjunctive processing, can be used by BMW and Wand algos.
   std::pair<typename std::vector<plist_wrapper*>::iterator, double>
   determine_candidate(std::vector<plist_wrapper*>& postings_lists,
-                      double threshold) {
+                      double threshold, bool heap_full = false) {
 
     threshold = threshold * m_F; //Theta push
     double score = 0;
@@ -254,7 +286,8 @@ public:
     auto end = postings_lists.end();
     while(itr != end) {
       score += (*itr)->list_max_score;
-      if(score > threshold) {
+      if((heap_full && score > threshold) ||
+         (!heap_full && score >= threshold)) {
         // forward to last list equal to pivot
         auto pivot_id = (*itr)->cur.docid();
         auto next = itr+1;
@@ -284,7 +317,7 @@ public:
     double W_d = ranker->doc_length(doc_id);
     auto itr = postings_lists.begin();
     auto end = postings_lists.end();
-    // Iterate postings 
+    // Iterate postings
     while (itr != end) {
       // Score the document if
       if ((*itr)->cur.docid() == doc_id) {
@@ -295,27 +328,28 @@ public:
         potential_score += contrib;
         potential_score -= (*itr)->list_max_score; //Incremental refinement
         ++((*itr)->cur); // move to next larger doc_id
-        // Check the refined potential max score 
+        // Check the refined potential max score
         if (potential_score < threshold) {
           // Doc can no longer make the heap. Forward relevant lists.
           itr++;
-          while (itr != end && (*itr)->cur != (*itr)->end 
+          while (itr != end && (*itr)->cur != (*itr)->end
                             && (*itr)->cur.docid() == doc_id) {
             ++((*itr)->cur);
             itr++;
           }
           break;
         }
-      } 
+      }
       else {
         break;
       }
       itr++;
     }
+
     // add if it is in the top-k
     if (heap.size() < k) {
       heap.push({doc_id,doc_score});
-    } 
+    }
     else {
       if (heap.top().score < doc_score) {
         heap.pop();
@@ -332,19 +366,19 @@ public:
 
   // Block-Max pivot evaluation
   double evaluate_pivot_bmw(std::vector<plist_wrapper*>& postings_lists,
-                        std::priority_queue<doc_score,
-                        std::vector<doc_score>,
-                        std::greater<doc_score>>& heap,
-                        double potential_score,
-                        const double threshold,
-                        const size_t k) {
+                            std::priority_queue<doc_score,
+                            std::vector<doc_score>,
+                            std::greater<doc_score>>& heap,
+                            double potential_score,
+                            const double threshold,
+                            const size_t k, bool& heap_full) {
 
     uint64_t doc_id = postings_lists[0]->cur.docid(); // pivot
     double doc_score = 0;
     double W_d = ranker->doc_length(doc_id);
     auto itr = postings_lists.begin();
     auto end = postings_lists.end();
-    
+
     // Iterate PLs
     while (itr != end) {
       // If we have the pivot, contribute the score
@@ -358,39 +392,40 @@ public:
         uint64_t bid = (*itr)->cur.block_containing_id(doc_id);
         potential_score -= (*itr)->cur.block_max(bid);
         ++((*itr)->cur); // move to next larger doc_id
-        // Doc cannot make heap, but we need to forward lists anyway 
+        // Doc cannot make heap, but we need to forward lists anyway
         if (potential_score < threshold) {
-          // move the other equal ones ahead still! 
+          // move the other equal ones ahead still!
           itr++;
-          while (itr != end && (*itr)->cur != (*itr)->end 
+          while (itr != end && (*itr)->cur != (*itr)->end
                             && (*itr)->cur.docid() == doc_id) {
             ++((*itr)->cur);
             itr++;
           }
           break;
-        }  
-      } 
+        }
+      }
       else {
         break;
       }
       itr++;
     }
-    // add if it is in the top-k
-    if (heap.size() < k) {
-      heap.push({doc_id,doc_score});
-    } 
-    else {
-      if (heap.top().score < doc_score) {
-        heap.pop();
-        heap.push({doc_id,doc_score});
-      }
+
+    if (heap_full && doc_score > threshold) {
+      heap.pop();
+      heap.push({doc_id, doc_score});
+    } else if (!heap_full && doc_score >= threshold) {
+      heap.push({doc_id, doc_score});
     }
+
+    heap_full = heap.size() == k;
+
     // resort
     sort_list_by_id(postings_lists);
-    if (heap.size()) {
+
+    if (heap_full)
       return heap.top().score;
-    }
-    return 0.0f;
+
+    return threshold;
   }
 
 
@@ -402,7 +437,7 @@ public:
     std::priority_queue<doc_score,std::vector<doc_score>,
                         std::greater<doc_score>> score_heap;
 
-    // init list processing 
+    // init list processing
     double threshold = 0.0f;
 
     // Initial Sort, get the pivot and its potential score
@@ -421,7 +456,7 @@ public:
                                      threshold,
                                      k);
       }
-      // We must forward the lists before the puvot up to our pivot doc  
+      // We must forward the lists before the puvot up to our pivot doc
       else {
         forward_lists(postings_lists,pivot_list,(*pivot_list)->cur.docid());
       }
@@ -449,7 +484,7 @@ public:
     std::priority_queue<doc_score,std::vector<doc_score>,
                         std::greater<doc_score>> score_heap;
 
-    // init list processing 
+    // init list processing
     double threshold = 0.0f;
     // Initial Sort, get the pivot and its potential score
     sort_list_by_id(postings_lists);
@@ -460,7 +495,7 @@ public:
 
     // While our pivot doc is not the end of the PL and we have not exhausted
     // any of our PL's
-    while (pivot_list != postings_lists.end() && 
+    while (pivot_list != postings_lists.end() &&
                 postings_lists.size() == initial) {
       // If the first posting ID is that of the pivot, evaluate!
       if (postings_lists[0]->cur.docid() == (*pivot_list)->cur.docid()) {
@@ -470,7 +505,7 @@ public:
                                      threshold,
                                      k);
       }
-      // We must forward the lists before the pivot up to our pivot doc  
+      // We must forward the lists before the pivot up to our pivot doc
       else {
         forward_lists(postings_lists,pivot_list,(*pivot_list)->cur.docid());
       }
@@ -492,68 +527,80 @@ public:
 
   // BlockMax Wand Disjunctive
   result process_bmw_disjunctive(std::vector<plist_wrapper*>& postings_lists,
-                            const size_t k){   
+                                 const std::string& query_str,
+                                 const size_t k) {
     result res;
     // heap containing the top-k docs
     std::priority_queue<doc_score,std::vector<doc_score>,
                         std::greater<doc_score>> score_heap;
-    
+    bool heap_full = false;
+
     // init list processing , grab first pivot and potential score
-    double threshold = 0;
-    sort_list_by_id(postings_lists);
-    auto pivot_and_score = determine_candidate(postings_lists, threshold);
-    auto pivot_list = std::get<0>(pivot_and_score);
+    bool in_cache = cache.find(query_str) != cache.end();
 
-    // While we have got documents left to evaluate
-    while (pivot_list != postings_lists.end()) {
-      uint64_t candidate_id = (*pivot_list)->cur.docid();
-      // Second level candidate check
-      auto candidate_and_score = potential_candidate(postings_lists, pivot_list,
-                                          threshold, candidate_id);
-      auto candidate = std::get<0>(candidate_and_score);
-      auto potential_score = std::get<1>(candidate_and_score);
-      // If the document is still a candidate from BM scores
-      if (candidate) {
-        // If lists are aligned for pivot, score the doc
-        if (postings_lists[0]->cur.docid() == candidate_id) {
-          threshold = evaluate_pivot_bmw(postings_lists, score_heap,
-                                     potential_score, threshold, k);
+    if (!in_cache) {
+      double threshold = in_cache ? cache.at(query_str) : 0.0;
+      sort_list_by_id(postings_lists);
+      auto pivot_and_score = determine_candidate(
+          postings_lists, threshold);
+      auto pivot_list = std::get<0>(pivot_and_score);
+
+      // While we have got documents left to evaluate
+      while (pivot_list != postings_lists.end()) {
+        uint64_t candidate_id = (*pivot_list)->cur.docid();
+        // Second level candidate check
+        auto candidate_and_score = potential_candidate(
+            postings_lists, pivot_list, threshold, candidate_id, heap_full);
+        auto candidate = std::get<0>(candidate_and_score);
+        auto potential_score = std::get<1>(candidate_and_score);
+        // If the document is still a candidate from BM scores
+        if (candidate) {
+          // If lists are aligned for pivot, score the doc
+          if (postings_lists[0]->cur.docid() == candidate_id) {
+            threshold = evaluate_pivot_bmw(
+                postings_lists, score_heap, potential_score, threshold, k,
+                heap_full);
+          }
+          // Need to forward list before the pivot
+          else {
+            forward_lists(postings_lists,pivot_list,candidate_id);
+          }
         }
-        // Need to forward list before the pivot 
+        // Use the knowledge that current block-max config can not yield a
+        // solution, and skip to the next possible fruitful configuration
         else {
-          forward_lists(postings_lists,pivot_list,candidate_id);
+          forward_lists_bmw(postings_lists,pivot_list,candidate_id);
         }
+        // Grab a new pivot and keep going!
+        pivot_and_score = determine_candidate(
+            postings_lists, threshold, heap_full);
+        pivot_list = std::get<0>(pivot_and_score);
+        potential_score = std::get<1>(pivot_and_score);
       }
-      // Use the knowledge that current block-max config can not yield a
-      // solution, and skip to the next possible fruitful configuration
-      else {
-        forward_lists_bmw(postings_lists,pivot_list,candidate_id); 
+
+      if (dyn_cache)
+        cache[query_str] = threshold;
+
+      // return the top-k results
+      res.list.resize(score_heap.size());
+      for (size_t i=0;i<res.list.size();i++) {
+        auto min = score_heap.top(); score_heap.pop();
+        res.list[res.list.size()-1-i] = min;
       }
-      // Grab a new pivot and keep going!
-      pivot_and_score = determine_candidate(postings_lists,
-                                            threshold);
-      pivot_list = std::get<0>(pivot_and_score);
-      potential_score = std::get<1>(pivot_and_score);
-      
     }
 
-    // return the top-k results
-    res.list.resize(score_heap.size());
-    for (size_t i=0;i<res.list.size();i++) {
-      auto min = score_heap.top(); score_heap.pop();
-      res.list[res.list.size()-1-i] = min;
-    }
     return res;
   }
 
   // BlockMax Wand Conjunctive
+  // This function is currently disabled
   result process_bmw_conjunctive(std::vector<plist_wrapper*>& postings_lists,
-                                const size_t k){   
+                                const size_t k){
     result res;
     // heap containing the top-k docs
     std::priority_queue<doc_score,std::vector<doc_score>,
                         std::greater<doc_score>> score_heap;
-    
+
     // init list processing , grab first pivot and potential score
     double threshold = 0;
     sort_list_by_id(postings_lists);
@@ -574,10 +621,10 @@ public:
       if (candidate) {
         // If lists are aligned for pivot, score the doc
         if (postings_lists[0]->cur.docid() == candidate_id) {
-          threshold = evaluate_pivot_bmw(postings_lists, score_heap,
-                                     potential_score, threshold, k);
+          // threshold = evaluate_pivot_bmw(postings_lists, score_heap,
+          //                                potential_score, threshold, k);
         }
-        // Need to forward list before the pivot 
+        // Need to forward list before the pivot
         else {
           forward_lists(postings_lists,pivot_list,candidate_id);
         }
@@ -585,13 +632,13 @@ public:
       // Use the knowledge that current block-max config can not yield a
       // solution, and skip to the next possible fruitful configuration
       else {
-        forward_lists_bmw(postings_lists,pivot_list,candidate_id); 
+        forward_lists_bmw(postings_lists,pivot_list,candidate_id);
       }
       // Grab a new pivot and keep going!
       pivot_and_score = determine_candidate(postings_lists);
       pivot_list = std::get<0>(pivot_and_score);
       potential_score = std::get<1>(pivot_and_score);
-      
+
     }
 
     // return the top-k results
@@ -604,15 +651,15 @@ public:
   }
 
 
-  result search(const std::vector<query_token>& qry, const size_t k,
+  result search(const query_t& qry, const size_t k,
                 const index_form t_index_type,
                 const query_traversal t_index_traversal) {
 
     m_conjunctive_max = 0.0f; // Reset for new query
-    std::vector<plist_wrapper> pl_data(qry.size());
+    std::vector<plist_wrapper> pl_data(qry.tokens.size());
     std::vector<plist_wrapper*> postings_lists;
     size_t j=0;
-    for (const auto& qry_token : qry) {
+    for (const auto& qry_token : qry.tokens) {
       pl_data[j] = plist_wrapper(m_postings_lists[qry_token.token_id]);
       postings_lists.emplace_back(&(pl_data[j]));
       m_conjunctive_max += pl_data[j].list_max_score;
@@ -622,7 +669,7 @@ public:
     // Select and run query
     if (t_index_type == BMW) {
       if (t_index_traversal == OR)
-        return process_bmw_disjunctive(postings_lists,k);
+        return process_bmw_disjunctive(postings_lists, qry.query_str, k);
       else if (t_index_traversal == AND)
         return process_bmw_conjunctive(postings_lists,k);
     }
@@ -633,7 +680,7 @@ public:
       else if (t_index_traversal == AND)
         return process_wand_conjunctive(postings_lists,k);
     }
-    
+
     else {
       std::cerr << "Invalid run-type selected. Must be wand or bmw."
                 << std::endl;
@@ -646,7 +693,7 @@ public:
 // Search
 template<class t_pl,class t_rank>
 void construct(idx_invfile<t_pl,t_rank> &idx,
-               std::string& postings_file, 
+               std::string& postings_file,
                 const double F)
 {
     using namespace sdsl;
@@ -655,4 +702,3 @@ void construct(idx_invfile<t_pl,t_rank> &idx,
     cout << "Done" << endl;
 }
 #endif
-

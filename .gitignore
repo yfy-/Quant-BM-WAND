@@ -38,3 +38,4 @@ bin/mk_impact_idx
 bin/wand_search
 src/kstem_query
 src/mk_impact_idx
+build-*

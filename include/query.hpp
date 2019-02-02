@@ -31,7 +31,7 @@ struct result {
   uint64_t postings_evaluated = 0; // Sum calls to "evaluate_pivot"
   uint64_t postings_total = 0; // Sum of lengths of postings lists from query
   uint64_t docs_fully_evaluated = 0;
-  uint64_t docs_added_to_heap = 0; 
+  uint64_t docs_added_to_heap = 0;
   double final_threshold = 0; // Final top-k heap threshold
 };
 
@@ -39,15 +39,31 @@ struct query_token{
     uint64_t token_id;
     std::string token_str;
     uint64_t f_qt;
-	query_token(const uint64_t id,
-              const std::string str,
-              uint64_t f) : token_id(id), token_str(str), 
-              f_qt(f) 
+
+    query_token(const uint64_t id,
+                const std::string str,
+                uint64_t f) : token_id(id), token_str(str),
+                              f_qt(f)
     {
+    }
+
+    bool operator<(const query_token& other)
+    {
+        return token_id < other.token_id;
     }
 };
 
-using query_t = std::tuple<uint64_t,std::vector<query_token>>;
+struct query_t {
+    uint64_t query_id;
+    std::string query_str;
+    std::vector<query_token> tokens;
+
+    query_t(uint64_t qid, std::string str, std::vector<query_token> t) :
+            query_id(qid), query_str(str), tokens(t)
+    {
+    }
+    query_t() {}
+};
 
 
 struct query_parser {
@@ -81,7 +97,7 @@ struct query_parser {
         return {id_mapping,reverse_id_mapping};
     }
 
-    static std::tuple<bool,uint64_t,std::vector<uint64_t>> 
+    static std::tuple<bool,uint64_t,std::vector<uint64_t>>
         map_to_ids(const std::unordered_map<std::string,uint64_t>& id_mapping,
                    std::string query_str,bool only_complete,bool integers)
     {
@@ -101,8 +117,8 @@ struct query_parser {
                 if(id_itr != id_mapping.end()) {
                     ids.push_back(id_itr->second);
                 } else {
-                    std::cerr << "ERROR: could not find '" 
-                              << qry_token << "' in the dictionary." 
+                    std::cerr << "ERROR: could not find '"
+                              << qry_token << "' in the dictionary."
                               << std::endl;
                     if(only_complete) {
                         return std::make_tuple(false,qry_id,ids);
@@ -110,7 +126,23 @@ struct query_parser {
                 }
             }
         }
-        return std::make_tuple(true,qry_id,ids);
+
+        return std::make_tuple(!ids.empty(), qry_id, ids);
+    }
+
+    static std::string
+    rewrite_ordered(const std::vector<query_token>& tokens)
+    {
+        auto it = tokens.begin();
+        std::string rewritten = it->token_str;
+        it++;
+
+        while (it != tokens.end()) {
+            rewritten += " " + it->token_str;
+            it++;
+        }
+
+        return rewritten;
     }
 
     static std::pair<bool,query_t> parse_query(const mapping_t& mapping,
@@ -125,7 +157,7 @@ struct query_parser {
 
         bool parse_ok = std::get<0>(mapped_qry);
         auto qry_id = std::get<1>(mapped_qry);
-        
+
         if(parse_ok) {
             std::unordered_map<uint64_t,uint64_t> qry_set;
             const auto& tids = std::get<2>(mapped_qry);
@@ -144,7 +176,9 @@ struct query_parser {
                 query_tokens.emplace_back(term,term_str,qry_tok.second);
                 ++index;
             }
-            query_t q(qry_id,query_tokens);
+            std::sort(query_tokens.begin(), query_tokens.end());
+            std::string ord_qry_str = rewrite_ordered(query_tokens);
+            query_t q(qry_id, ord_qry_str, query_tokens);
             return {true,q};
         }
 
@@ -161,7 +195,7 @@ struct query_parser {
         /* load the mapping */
         auto mapping = load_dictionary(collection_dir);
         /* parse queries */
-        std::ifstream qfs(query_file); 
+        std::ifstream qfs(query_file);
         if(!qfs.is_open()) {
             std::cerr << "cannot load query file.";
             exit(EXIT_FAILURE);

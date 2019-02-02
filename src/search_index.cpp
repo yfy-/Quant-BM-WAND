@@ -26,6 +26,9 @@ typedef struct cmdargs {
     double F_boost;
     query_traversal traversal;
     std::string traversal_string;
+    std::string cache_file;
+    bool dyn_cache;
+    bool report_only_time;
 } cmdargs_t;
 
 void print_usage(std::string program) {
@@ -35,6 +38,9 @@ void print_usage(std::string program) {
                        << " -z <F: aggression parameter. 1.0 is rank-safe>"
                        << " -o <output file handle>"
                        << " -t <traversal type: AND|OR>"
+                       << " -f <result file to cache statically>"
+                       << " -d <cache dynamically>"
+                       << " -r <only report time logs>"
                        << std::endl;
   exit(EXIT_FAILURE);
 }
@@ -50,7 +56,10 @@ parse_args(int argc, char* const argv[])
   args.traversal_string = "";
   args.k = 10;
   args.F_boost = 1.0;
-  while ((op=getopt(argc,argv,"c:q:k:z:o:t:")) != -1) {
+  args.cache_file = "";
+  args.dyn_cache = false;
+  args.report_only_time = false;
+  while ((op=getopt(argc,argv,"c:q:k:z:o:t:f:dr")) != -1) {
     switch (op) {
       case 'c':
         args.collection_dir = optarg;
@@ -77,8 +86,17 @@ parse_args(int argc, char* const argv[])
           args.traversal = OR;
         else if (args.traversal_string == "AND")
           args.traversal = AND;
-        else 
+        else
           print_usage(argv[0]);
+        break;
+      case 'f':
+        args.cache_file = optarg;
+        break;
+      case 'd':
+        args.dyn_cache = true;
+        break;
+      case 'r':
+        args.report_only_time = true;
         break;
       case '?':
       default:
@@ -93,7 +111,7 @@ parse_args(int argc, char* const argv[])
   return args;
 }
 
-int 
+int
 main (int argc,char* const argv[])
 {
   /* define types */
@@ -104,15 +122,15 @@ main (int argc,char* const argv[])
   /* parse command line */
   cmdargs_t args = parse_args(argc,argv);
 
-  std::cerr << "NOTE: Global F boost = " << args.F_boost << std::endl;
+  std::cout << "NOTE: Global F boost = " << args.F_boost << std::endl;
 
   // Read the index and traversal type
   std::ifstream read_type(args.index_type_file);
   std::string t_traversal, t_postings;
   read_type >> t_traversal;
   read_type >> t_postings;
-  
-  // Wand or BMW index? 
+
+  // Wand or BMW index?
   index_form t_index_type;
   if (t_traversal == STRING_WAND)
     t_index_type = WAND;
@@ -136,7 +154,7 @@ main (int argc,char* const argv[])
     exit(EXIT_FAILURE);
   }
 
- 
+
   /* parse queries */
   std::cout << "Parsing query file '" << args.query_file << "'" << std::endl;
   auto queries = query_parser::parse_queries(args.collection_dir,args.query_file);
@@ -146,13 +164,14 @@ main (int argc,char* const argv[])
 
   /* load the index */
   my_index_t index;
- 
+
   auto load_start = clock::now();
   // Construct index instance.
   construct(index, args.postings_file, args.F_boost);
 
   // Prepare Ranker
   uint64_t temp;
+
   std::vector<uint64_t>doc_lens;
   ifstream doclen_file(args.doclen_file);
   if(!doclen_file.is_open()){
@@ -168,11 +187,12 @@ main (int argc,char* const argv[])
   if(!global_file.is_open()) {
     std::cerr << "Couldn't open: " << args.global_file << std::endl;
     exit(EXIT_FAILURE);
-  } 
+  }
   // Load the ranker
   uint64_t total_docs, total_terms;
   global_file >> total_docs >> total_terms;
   index.load(doc_lens, total_terms, total_docs, t_postings_type);
+  index.set_dyn_cache(args.dyn_cache);
 
   auto load_stop = clock::now();
   auto load_time_sec = std::chrono::duration_cast<std::chrono::seconds>(load_stop-load_start);
@@ -182,26 +202,33 @@ main (int argc,char* const argv[])
   std::map<uint64_t,std::chrono::microseconds> query_times;
   std::map<uint64_t,result> query_results;
   std::map<uint64_t,uint64_t> query_lengths;
+  std::map<uint64_t, std::string> rewritten_queries;
 
-  size_t num_runs = 3;
-  std::cerr << "Times are the average across " << num_runs << " runs." << std::endl;
+  size_t num_runs = 1;
+  std::cout << "Times are the average across " << num_runs << " runs." << std::endl;
   for(size_t i = 0; i < num_runs; i++) {
+    if (args.cache_file != "") {
+      std::cout << "Loading static cache with " << args.cache_file << "\n";
+      index.reset_cache();
+      index.load_cache(args.cache_file);
+    }
+
+    std::cout << "Query pass no " << i + 1 << std::endl;
     // For each query
     for(const auto& query: queries) {
-      auto id = std::get<0>(query);
-      auto qry_tokens = std::get<1>(query);
-      std::cout << "[" << id << "] |Q|=" << qry_tokens.size(); 
+      uint64_t id = query.query_id;
+      std::vector<query_token> qry_tokens = query.tokens;
+      std::cout << "[" << id << "] |Q|=" << qry_tokens.size();
       std::cout.flush();
 
       // run the query
       auto qry_start = clock::now();
-      auto results = index.search(qry_tokens,args.k, t_index_type, args.traversal);
+      auto results = index.search(query,args.k, t_index_type, args.traversal);
       auto qry_stop = clock::now();
 
       auto query_time = std::chrono::duration_cast<std::chrono::microseconds>(qry_stop-qry_start);
       std::cout << " TIME = " << std::setprecision(5)
-                << query_time.count() / 1000.0 
-                << " ms" << std::endl;
+                << query_time.count() / 1000.0 << " ms" << std::endl;
 
       auto itr = query_times.find(id);
       if(itr != query_times.end()) {
@@ -213,6 +240,7 @@ main (int argc,char* const argv[])
       if(i==0) {
         query_results[id] = results;
         query_lengths[id] = qry_tokens.size();
+        rewritten_queries[id] = query.query_str;
       }
     }
   }
@@ -221,7 +249,7 @@ main (int argc,char* const argv[])
   // generate output string
   args.output_prefix = args.output_prefix + "-" // user specified
                        + t_postings + "-"  // quantized or frequency
-                       + t_traversal + "-" // wand or bmw 
+                       + t_traversal + "-" // wand or bmw
                        + args.traversal_string + "-" // OR, AND, etc
                        + std::to_string(args.k) + "-" // no. results
                        + std::to_string(args.F_boost);
@@ -234,7 +262,7 @@ main (int argc,char* const argv[])
   std::string time_file = args.output_prefix + "-time.log";
 
   /* output */
-  std::cout << "Writing timing results to '" << time_file << "'" << std::endl;     
+  std::cout << "Writing timing results to '" << time_file << "'" << std::endl;
   std::ofstream resfs(time_file);
   if(resfs.is_open()) {
     resfs << "query;num_results;postings_eval;docs_fully_eval;docs_added_to_heap;threshold;num_terms;time_ms;traversal_type" << std::endl;
@@ -242,12 +270,12 @@ main (int argc,char* const argv[])
       auto qry_id = timing.first;
       auto qry_time = timing.second;
       auto results = query_results[qry_id];
-      resfs << qry_id << ";" << results.list.size() << ";" 
+      resfs << qry_id << ";" << results.list.size() << ";"
             << results.postings_evaluated << ";"
-            << results.docs_fully_evaluated << ";" 
-            << results.docs_added_to_heap << ";" 
-            << results.final_threshold << ";" 
-            << query_lengths[qry_id] << ";" 
+            << results.docs_fully_evaluated << ";"
+            << results.docs_added_to_heap << ";"
+            << results.final_threshold << ";"
+            << query_lengths[qry_id] << ";"
             << qry_time.count() / 1000.0 << ";"
             << args.traversal_string << std::endl;
     }
@@ -267,27 +295,41 @@ main (int argc,char* const argv[])
     id_mapping[j] = name_mapping;
     j++;
   }
- 
 
-  std::string trec_file = args.output_prefix + "-trec.run";
-  std::cout << "Writing trec output to " << trec_file << std::endl;
-  std::ofstream trec_out(trec_file);
-  if(trec_out.is_open()) {
-    for(const auto& result: query_results) {
-      auto qry_id = result.first;
-      auto qry_res = result.second.list;
-      for(size_t i=1;i<=qry_res.size();i++) {
-        trec_out << qry_id << "\t"
-                 << "Q0" << "\t"
-                 << id_mapping[qry_res[i-1].doc_id] << "\t"
-                 << i << "\t"
-                 << qry_res[i-1].score << "\t"  
-                 << "WANDbl" << std::endl;
+
+  if (!args.report_only_time) {
+    std::string trec_file = args.output_prefix + "-trec.run";
+    std::cout << "Writing trec output to " << trec_file << std::endl;
+    std::ofstream trec_out(trec_file);
+    if(trec_out.is_open()) {
+      for(const auto& result: query_results) {
+        auto qry_id = result.first;
+        auto qry_res = result.second.list;
+        for(size_t i=1;i<=qry_res.size();i++) {
+          trec_out << qry_id << "\t"
+                   << "Q0" << "\t"
+                   << id_mapping[qry_res[i-1].doc_id] << "\t"
+                   << i << "\t"
+                   << qry_res[i-1].score << "\t"
+                   << "WANDbl" << std::endl;
+        }
       }
+    } else {
+      perror ("Could not output results to file.");
     }
-  } else {
-    perror ("Could not output results to file.");
+
+    std::string rewrite_file = args.output_prefix + "-rewrite.qry";
+    std::cout << "Writing rewritten queries to " << rewrite_file << std::endl;
+    std::ofstream rewrite_out(rewrite_file);
+
+    if (rewrite_out.is_open()) {
+      for (const auto& rwrt: rewritten_queries)
+        rewrite_out << rwrt.first << ";" << rwrt.second << "\n";
+    } else {
+      perror ("Could not output results to file.");
+    }
   }
+
 
   return EXIT_SUCCESS;
 }
