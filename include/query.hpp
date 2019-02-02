@@ -47,7 +47,7 @@ struct query_token{
     {
     }
 
-    bool operator<(const query_token& other)
+    bool operator<(const query_token& other) const
     {
         return token_id < other.token_id;
     }
