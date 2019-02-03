@@ -17,7 +17,7 @@ with open(args.trec_file) as tf, open(args.query_file) as qf:
     q_count = 1
     for qf_line in qf:
         if q_count % 10000 == 0:
-            print(q_count // 10000)
+            print("Processed {0}\r".format(q_count))
 
         q_count += 1
         query_id, query = qf_line.rstrip().split(';')
@@ -36,6 +36,7 @@ with open(args.trec_file) as tf, open(args.query_file) as qf:
             rank = int(trec_tokens[3])
             score = score if found_score else int(trec_tokens[4])
             trec_tokens = None
+
             if rank == args.top_k:
                 found_score = True
 
