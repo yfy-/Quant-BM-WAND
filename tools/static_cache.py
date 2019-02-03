@@ -9,7 +9,7 @@ parser.add_argument("out_file", help="Out file")
 parser.add_argument("-k", "--top-k", type=int, help="Cache k'th document")
 args = parser.parse_args()
 
-query_threshold = dict()
+query_threshold = []
 
 trec_tokens = None
 
@@ -17,7 +17,7 @@ with open(args.trec_file) as tf, open(args.query_file) as qf:
     q_count = 1
     for qf_line in qf:
         if q_count % 10000 == 0:
-            print("Processed {0}\r".format(q_count))
+            print("Processed {0}\r".format(q_count), end="")
 
         q_count += 1
         query_id, query = qf_line.rstrip().split(';')
@@ -41,8 +41,8 @@ with open(args.trec_file) as tf, open(args.query_file) as qf:
                 found_score = True
 
         if score > 0:
-            query_threshold[query] = score
+            query_threshold.append((query, score))
 
 with open(args.out_file, "w") as of:
-    for query, threshold in query_threshold.items():
+    for query, threshold in query_threshold:
         of.write("{};{}\n".format(query, threshold))
