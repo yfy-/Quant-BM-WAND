@@ -525,9 +525,119 @@ public:
     return res;
   }
 
+#ifdef SUBSET_THRESHOLD
+  std::vector<std::string> subset_gen3(const std::vector<query_token>& tokens) {
+    int n = tokens.size();
+    std::vector<std::string> subsets;
+    int i = 0;
+    int j = i + 1;
+    int k = j + 1;
+
+    while (i < n - 2) {
+      while (j < n - 1) {
+        while (k < n) {
+          std::string subset = tokens[i].token_str + " " + tokens[j].token_str +
+                               " " + tokens[k].token_str;
+          subsets.push_back(subset);
+          k++;
+        }
+        j++;
+        k = j + 1;
+      }
+      i++;
+      j = i + 1;
+      k = j + 1;
+    }
+
+    return subsets;
+  }
+
+  std::vector<std::string> subset_gen2(const std::vector<query_token>& tokens) {
+    int n = tokens.size();
+    std::vector<std::string> subsets;
+    int i = 0;
+    int j = i + 1;
+
+    while (i < n - 1) {
+      while (j < n) {
+        std::string subset = tokens[i].token_str + " " + tokens[j].token_str;
+        subsets.push_back(subset);
+        j++;
+      }
+      i++;
+      j = i + 1;
+    }
+    return subsets;
+  }
+
+  std::vector<std::string> subset_gen1(const std::vector<query_token>& tokens) {
+    int n = tokens.size();
+    std::vector<std::string> subsets;
+    int i = 0;
+
+    while (i < n) {
+      std::string subset = tokens[i].token_str;
+      subsets.push_back(subset);
+      i++;
+    }
+    return subsets;
+  }
+
+  bool subset_max_exists(const std::vector<std::string>& subsets,
+                         double& max_threshold) {
+    bool exists = false;
+
+    for (const auto& s : subsets) {
+      bool in_cache = cache.find(s) != cache.end();
+
+      if (in_cache) {
+        exists = true;
+        double threshold = cache[s];
+        if (threshold > max_threshold)
+          max_threshold = threshold;
+      }
+    }
+
+    return exists;
+  }
+
+  double lowerbound_threshold(const query_t& query) {
+    double threshold = 0.0;
+    std::vector<query_token> tokens = query.tokens;
+    int tokens_len = tokens.size();
+
+    if (tokens_len > 3) {
+      std::vector<std::string> subsets3 = subset_gen3(tokens);
+
+      if (subset_max_exists(subsets3, threshold))
+        return threshold;
+    }
+
+    if (tokens_len > 2) {
+      std::vector<std::string> subsets2 = subset_gen2(query.tokens);
+
+      if (subset_max_exists(subsets2, threshold))
+        return threshold;
+    }
+
+    if (tokens_len > 1) {
+      std::vector<std::string> subsets1 = subset_gen1(query.tokens);
+
+      if (subset_max_exists(subsets1, threshold))
+        return threshold;
+    }
+
+    return threshold;
+  }
+#else
+  double lowerbound_threshold(const query_t& query) {
+    return 0.0;
+  }
+#endif
+
   // BlockMax Wand Disjunctive
   result process_bmw_disjunctive(std::vector<plist_wrapper*>& postings_lists,
-                                 const std::string& query_str,
+                                 const query_t& query,
                                  const size_t k) {
     result res;
     // heap containing the top-k docs
@@ -535,11 +645,10 @@ public:
                         std::greater<doc_score>> score_heap;
     bool heap_full = false;
 
-    // init list processing , grab first pivot and potential score
-    bool in_cache = cache.find(query_str) != cache.end();
+    bool in_cache = cache.find(query.query_str) != cache.end();
 
     if (!in_cache) {
-      double threshold = in_cache ? cache.at(query_str) : 0.0;
+      double threshold = lowerbound_threshold(query);
       sort_list_by_id(postings_lists);
       auto pivot_and_score = determine_candidate(
           postings_lists, threshold);
@@ -579,7 +688,7 @@ public:
       }
 
       if (dyn_cache)
-        cache[query_str] = threshold;
+        cache[query.query_str] = threshold;
 
       // return the top-k results
       res.list.resize(score_heap.size());
@@ -595,7 +704,7 @@ public:
   // BlockMax Wand Conjunctive
   // This function is currently disabled
   result process_bmw_conjunctive(std::vector<plist_wrapper*>& postings_lists,
-                                const size_t k){
+                                 const size_t k){
     result res;
     // heap containing the top-k docs
     std::priority_queue<doc_score,std::vector<doc_score>,
@@ -669,7 +778,7 @@ public:
     // Select and run query
     if (t_index_type == BMW) {
       if (t_index_traversal == OR)
-        return process_bmw_disjunctive(postings_lists, qry.query_str, k);
+        return process_bmw_disjunctive(postings_lists, qry, k);
       else if (t_index_traversal == AND)
         return process_bmw_conjunctive(postings_lists,k);
     }
