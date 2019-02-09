@@ -204,7 +204,7 @@ main (int argc,char* const argv[])
   std::map<uint64_t,uint64_t> query_lengths;
   std::map<uint64_t, std::string> rewritten_queries;
 
-  size_t num_runs = 3;
+  size_t num_runs = 1;
   std::cout << "Times are the average across " << num_runs << " runs." << std::endl;
   for(size_t i = 0; i < num_runs; i++) {
     if (args.cache_file != "") {
@@ -244,6 +244,8 @@ main (int argc,char* const argv[])
       }
     }
   }
+
+  std::cout << "Cache hit rate is " << index.hit_rate() << "\n";
 
 
   // generate output string

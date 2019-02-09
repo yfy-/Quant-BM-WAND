@@ -43,6 +43,8 @@ private:
   std::unique_ptr<ranker_type> ranker;
   std::unordered_map<std::string, double> cache;
   bool dyn_cache;
+  std::uint32_t cache_hit;
+  std::uint32_t cache_miss;
 
 public:
   idx_invfile() = default;
@@ -66,6 +68,8 @@ public:
       m_postings_lists[i].load(ifs);
     }
     dyn_cache = false;
+    cache_hit = 0;
+    cache_miss = 0;
   }
 
   auto serialize(std::ostream& out,
@@ -614,17 +618,16 @@ public:
     }
 
     if (tokens_len > 2) {
-      std::vector<std::string> subsets2 = subset_gen2(query.tokens);
+      std::vector<std::string> subsets2 = subset_gen2(tokens);
 
       if (subset_max_exists(subsets2, threshold))
         return threshold;
     }
 
     if (tokens_len > 1) {
-      std::vector<std::string> subsets1 = subset_gen1(query.tokens);
+      std::vector<std::string> subsets1 = subset_gen1(tokens);
 
-      if (subset_max_exists(subsets1, threshold))
-        return threshold;
+      subset_max_exists(subsets1, threshold);
     }
 
     return threshold;
@@ -634,6 +637,11 @@ public:
     return 0.0;
   }
 #endif
+
+  double hit_rate() {
+    std::uint32_t total = cache_miss + cache_hit;
+    return static_cast<double>(cache_hit) / static_cast<double>(total);
+  }
 
   // BlockMax Wand Disjunctive
   result process_bmw_disjunctive(std::vector<plist_wrapper*>& postings_lists,
@@ -647,7 +655,10 @@ public:
 
     bool in_cache = cache.find(query.query_str) != cache.end();
 
-    if (!in_cache) {
+    if (in_cache) {
+      cache_hit++;
+    } else {
+      cache_miss++;
       double threshold = lowerbound_threshold(query);
       sort_list_by_id(postings_lists);
       auto pivot_and_score = determine_candidate(
