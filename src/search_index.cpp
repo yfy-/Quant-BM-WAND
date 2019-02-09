@@ -29,6 +29,7 @@ typedef struct cmdargs {
     std::string cache_file;
     bool dyn_cache;
     bool report_only_time;
+    std::uint32_t num_runs;
 } cmdargs_t;
 
 void print_usage(std::string program) {
@@ -41,6 +42,7 @@ void print_usage(std::string program) {
                        << " -f <result file to cache statically>"
                        << " -d <cache dynamically>"
                        << " -r <only report time logs>"
+                       << " -n <number of runs>"
                        << std::endl;
   exit(EXIT_FAILURE);
 }
@@ -59,7 +61,8 @@ parse_args(int argc, char* const argv[])
   args.cache_file = "";
   args.dyn_cache = false;
   args.report_only_time = false;
-  while ((op=getopt(argc,argv,"c:q:k:z:o:t:f:dr")) != -1) {
+  args.num_runs = 3;
+  while ((op=getopt(argc,argv,"c:q:k:z:o:t:f:drn:")) != -1) {
     switch (op) {
       case 'c':
         args.collection_dir = optarg;
@@ -97,6 +100,9 @@ parse_args(int argc, char* const argv[])
         break;
       case 'r':
         args.report_only_time = true;
+        break;
+      case 'n':
+        args.num_runs = std::stoul(optarg);
         break;
       case '?':
       default:
@@ -204,9 +210,8 @@ main (int argc,char* const argv[])
   std::map<uint64_t,uint64_t> query_lengths;
   std::map<uint64_t, std::string> rewritten_queries;
 
-  size_t num_runs = 1;
-  std::cout << "Times are the average across " << num_runs << " runs." << std::endl;
-  for(size_t i = 0; i < num_runs; i++) {
+  std::cout << "Times are the average across " << args.num_runs << " runs." << std::endl;
+  for(size_t i = 0; i < args.num_runs; i++) {
     if (args.cache_file != "") {
       std::cout << "Loading static cache with " << args.cache_file << "\n";
       index.reset_cache();
@@ -258,7 +263,7 @@ main (int argc,char* const argv[])
 
   // Average the times
   for(auto& timing : query_times) {
-    timing.second = timing.second / num_runs;
+    timing.second = timing.second / args.num_runs;
   }
 
   std::string time_file = args.output_prefix + "-time.log";
