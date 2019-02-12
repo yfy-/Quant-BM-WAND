@@ -17,17 +17,19 @@ def main():
     to_csv = None
 
     for i, tf in enumerate(args.time_files):
-        qlens, avg_times = avg_time_qlen(tf, args.qlen)
+        qlens, qcounts, avg_times = avg_time_qlen(tf, args.qlen)
 
         if to_csv is None:
-            to_csv = np.hstack((v2cmtrx(qlens), v2cmtrx(avg_times)))
+            to_csv = np.hstack((v2cmtrx(qlens), v2cmtrx(qcounts),
+                                v2cmtrx(avg_times)))
         else:
             to_csv = np.hstack((to_csv, v2cmtrx(avg_times)))
 
         plt.plot(qlens, avg_times, 'o', label=args.names[i])
 
     with open(args.out, "w") as of:
-        of.write("query_length")
+        of.write("query_length,")
+        of.write("query_count")
 
         for name in args.names:
             of.write(",{}".format(name))
@@ -66,16 +68,20 @@ def avg_time_qlen(time_file, until_qlen):
 
     qlens = []
     avg_times = []
+    qcounts = []
 
-    for qlen in qlen_count.keys():
+    for qlen, qc in qlen_count.items():
         qlens.append(qlen)
+        qcounts.append(qc)
         avg_times.append(qlen_to_tot_time[qlen] / qlen_count[qlen])
 
     qlens = np.array(qlens)
     avg_times = np.array(avg_times)
+    qcounts = np.array(qcounts)
     qlen_sort_ind = qlens.argsort()
 
-    return qlens[qlen_sort_ind], avg_times[qlen_sort_ind]
+    return qlens[qlen_sort_ind], qcounts[qlen_sort_ind], \
+        avg_times[qlen_sort_ind]
 
 
 if __name__ == "__main__":
