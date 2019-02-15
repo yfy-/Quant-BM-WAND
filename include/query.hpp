@@ -8,8 +8,8 @@
 #include <unordered_map>
 #include <algorithm>
 
-#include "util.hpp"
 
+const std::string DICT_FILENAME = "dict.txt";
 
 struct doc_score {
 	uint64_t doc_id;
@@ -36,14 +36,15 @@ struct result {
 };
 
 struct query_token{
-    uint64_t token_id;
-    std::string token_str;
-    uint64_t f_qt;
+  uint64_t token_id;
+  std::string token_str;
+  uint64_t f_qt;
+  std::uint64_t df;
 
     query_token(const uint64_t id,
                 const std::string str,
                 uint64_t f) : token_id(id), token_str(str),
-                              f_qt(f)
+                              f_qt(f), df(0)
     {
     }
 

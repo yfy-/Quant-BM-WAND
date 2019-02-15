@@ -36,32 +36,32 @@ char *ATIRE_DOCUMENT_FILE_START = "~documentfilenamesstart";
 char *ATIRE_DOCUMENT_FILE_END = "~documentfilenamesfinish";
 const std::string STRING_WAND = "WAND";
 const std::string STRING_BMW = "BMW";
-const std::string DICT_FILENAME = "dict.txt";
+// const std::string DICT_FILENAME = "dict.txt";
 const std::string DOCNAMES_FILENAME = "doc_names.txt";
 const std::string STRING_FREQ = "FREQUENCY";
 const std::string STRING_QUANT = "QUANTIZED";
 
 // Knuth trick for comparing floating numbers
 // check if a and b are equal with respect to the defined tolerance epsilon
-inline bool float_equals( float a, float b) { 
-  const float epsilon = 0.0001; // or some other small number 
+inline bool float_equals( float a, float b) {
+  const float epsilon = 0.0001; // or some other small number
   if ((std::fabs(a-b) <= epsilon*std::fabs(a)) && (std::fabs(a-b) <= epsilon*std::fabs(b))) return true;
-  else return false; 
+  else return false;
 }
 
 // compare two floats ONLY for greater or smaller and NOT for equality
-inline bool float_ltgt( float a, float b) { 
+inline bool float_ltgt( float a, float b) {
   if (a > b) return true;
-  else return false; 
+  else return false;
 }
 
 // Arguments a,b and returns a) 0 in case of equality, b) 1 in case a > b, and c) -1 in case a < b
 inline int fcompare( float a, float b) {
   if (float_equals(a, b)) {
     return 0; // equal
-  } else { 
+  } else {
     if (float_ltgt(a, b)) return 1;  // a > b
-    else return -1; 
+    else return -1;
   }      // a < b
 }
 

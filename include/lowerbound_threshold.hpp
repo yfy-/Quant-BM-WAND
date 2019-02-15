@@ -1,0 +1,35 @@
+#ifndef LOWERBOUND_THRESHOLD_HPP
+#define LOWERBOUND_THRESHOLD_HPP
+
+#include <unordered_map>
+#include "query.hpp"
+
+typedef std::unordered_map<std::string, double> cache_t;
+
+// Naive threshold, always return 0
+double naive_threshold(const query_t& query, const cache_t& cache);
+
+/* Heuristic-1
+ * Generate 3 length subsets and return max of them if one of the subsets is
+ * in the cache. Otherwise repeat for 2 and 1
+ */
+double hr1_threshold(const query_t& query, const cache_t& cache);
+
+/* Heuristic-2
+ * Generate 3, 2 and 1 length subsets and return max of them if in cache.
+ */
+double hr2_threshold(const query_t& query, const cache_t& cache);
+
+/* Heuristic-3
+ * Generate n-1 subsets and return max of them if in cache.
+ */
+double hr3_threshold(const query_t& query, const cache_t& cache);
+
+/* Heuristic-3
+ * Generate subsets in decreased order by the token document frequency
+ * Return first found, since it is guaranteed to be maximum of remaining to be
+ * generated subsets
+ */
+double hr4_threshold(const query_t& query, const cache_t& cache);
+
+#endif  // LOWERBOUND_THRESHOLD_HPP

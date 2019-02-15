@@ -15,35 +15,37 @@
 #include "util.hpp"
 
 typedef struct cmdargs {
-    std::string collection_dir;
-    std::string query_file;
-    std::string postings_file;
-    std::string doclen_file;
-    std::string global_file;
-    std::string output_prefix;
-    std::string index_type_file;
-    uint64_t k;
-    double F_boost;
-    query_traversal traversal;
-    std::string traversal_string;
-    std::string cache_file;
-    bool dyn_cache;
-    bool report_only_time;
-    std::uint32_t num_runs;
+  std::string collection_dir;
+  std::string query_file;
+  std::string postings_file;
+  std::string doclen_file;
+  std::string global_file;
+  std::string output_prefix;
+  std::string index_type_file;
+  uint64_t k;
+  double F_boost;
+  query_traversal traversal;
+  std::string traversal_string;
+  std::string cache_file;
+  bool dyn_cache;
+  bool report_only_time;
+  std::uint32_t num_runs;
+  std::string threshold_method;
 } cmdargs_t;
 
 void print_usage(std::string program) {
   std::cerr << program << " -c <collection>"
-                       << " -q <query_file>"
-                       << " -k <no. items to retrieve>"
-                       << " -z <F: aggression parameter. 1.0 is rank-safe>"
-                       << " -o <output file handle>"
-                       << " -t <traversal type: AND|OR>"
-                       << " -f <result file to cache statically>"
-                       << " -d <cache dynamically>"
-                       << " -r <only report time logs>"
-                       << " -n <number of runs>"
-                       << std::endl;
+            << " -q <query_file>"
+            << " -k <no. items to retrieve>"
+            << " -z <F: aggression parameter. 1.0 is rank-safe>"
+            << " -o <output file handle>"
+            << " -t <traversal type: AND|OR>"
+            << " -f <result file to cache statically>"
+            << " -d <cache dynamically>"
+            << " -r <only report time logs>"
+            << " -n <number of runs>"
+            << " -m <threshold method: HR1|HR2|HR3|HR4, default is NAIVE>"
+            << std::endl;
   exit(EXIT_FAILURE);
 }
 
@@ -62,7 +64,8 @@ parse_args(int argc, char* const argv[])
   args.dyn_cache = false;
   args.report_only_time = false;
   args.num_runs = 3;
-  while ((op=getopt(argc,argv,"c:q:k:z:o:t:f:drn:")) != -1) {
+  args.threshold_method = "NAIVE";
+  while ((op=getopt(argc,argv,"c:q:k:z:o:t:f:drn:m:")) != -1) {
     switch (op) {
       case 'c':
         args.collection_dir = optarg;
@@ -103,6 +106,9 @@ parse_args(int argc, char* const argv[])
         break;
       case 'n':
         args.num_runs = std::stoul(optarg);
+        break;
+      case 'm':
+        args.threshold_method = optarg;
         break;
       case '?':
       default:
@@ -199,6 +205,7 @@ main (int argc,char* const argv[])
   global_file >> total_docs >> total_terms;
   index.load(doc_lens, total_terms, total_docs, t_postings_type);
   index.set_dyn_cache(args.dyn_cache);
+  index.set_threshold_method(args.threshold_method);
 
   auto load_stop = clock::now();
   auto load_time_sec = std::chrono::duration_cast<std::chrono::seconds>(load_stop-load_start);
@@ -210,7 +217,7 @@ main (int argc,char* const argv[])
   std::map<uint64_t,uint64_t> query_lengths;
   std::map<uint64_t, std::string> rewritten_queries;
 
-  std::cout << "Times are the average across " << args.num_runs << " runs." << std::endl;
+  std::cout << "Times are the average across " << args.num_runs << " runs.\n";
   for(size_t i = 0; i < args.num_runs; i++) {
     if (args.cache_file != "") {
       std::cout << "Loading static cache with " << args.cache_file << "\n";
@@ -218,13 +225,13 @@ main (int argc,char* const argv[])
       index.load_cache(args.cache_file);
     }
 
-    std::cout << "Query pass no " << i + 1 << std::endl;
+    // std::cout << "Query pass no " << i + 1 << std::endl;
     // For each query
-    for(const auto& query: queries) {
+    for(auto& query: queries) {
       uint64_t id = query.query_id;
       std::vector<query_token> qry_tokens = query.tokens;
-      std::cout << "[" << id << "] |Q|=" << qry_tokens.size();
-      std::cout.flush();
+      std::cerr << "[" << id << "] |Q|=" << qry_tokens.size();
+      std::cerr.flush();
 
       // run the query
       auto qry_start = clock::now();
@@ -232,7 +239,7 @@ main (int argc,char* const argv[])
       auto qry_stop = clock::now();
 
       auto query_time = std::chrono::duration_cast<std::chrono::microseconds>(qry_stop-qry_start);
-      std::cout << " TIME = " << std::setprecision(5)
+      std::cerr << " TIME = " << std::setprecision(5)
                 << query_time.count() / 1000.0 << " ms\r";
 
       auto itr = query_times.find(id);
@@ -248,10 +255,11 @@ main (int argc,char* const argv[])
         rewritten_queries[id] = query.query_str;
       }
     }
-    std::cout << "\n";
+    std::cerr << "\n";
   }
 
   std::cout << "Cache hit rate is " << index.hit_rate() << "\n";
+  std::cout << "Subset found rate is " << index.subset_found_rate() << "\n";
 
 
   // generate output string

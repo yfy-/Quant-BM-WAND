@@ -13,6 +13,7 @@
 #include "generic_rank.hpp"
 #include "bm25.hpp"
 #include "impact.hpp"
+#include "lowerbound_threshold.hpp"
 
 using namespace sdsl;
 
@@ -41,10 +42,13 @@ private:
 private:
   std::vector<plist_type> m_postings_lists;
   std::unique_ptr<ranker_type> ranker;
-  std::unordered_map<std::string, double> cache;
+  cache_t cache;
   bool dyn_cache;
   std::uint32_t cache_hit;
   std::uint32_t cache_miss;
+  std::uint32_t subset_found;
+  std::uint32_t subset_not_found;
+  double (*lowerbound_threshold)(const query_t&, const cache_t&);
 
 public:
   idx_invfile() = default;
@@ -70,6 +74,9 @@ public:
     dyn_cache = false;
     cache_hit = 0;
     cache_miss = 0;
+    subset_found = 0;
+    subset_not_found = 0;
+    lowerbound_threshold = &naive_threshold;
   }
 
   auto serialize(std::ostream& out,
@@ -122,6 +129,19 @@ public:
 
   void reset_cache() {
     cache.clear();
+  }
+
+  void set_threshold_method(const std::string& method) {
+    if (method == "HR1")
+      lowerbound_threshold = &hr1_threshold;
+    else if (method == "HR2")
+      lowerbound_threshold = &hr2_threshold;
+    else if (method == "HR3")
+      lowerbound_threshold = &hr3_threshold;
+    else if (method == "HR4")
+      lowerbound_threshold = &hr4_threshold;
+    else
+      lowerbound_threshold = &naive_threshold;
   }
 
   // Finds the posting with the least number of items remaining other than
@@ -444,7 +464,12 @@ public:
 
     bool heap_full = false;
     // init list processing
-    double threshold = lowerbound_threshold(query);
+    double threshold = lowerbound_threshold(query, cache);
+
+    if (threshold > 0.0)
+      subset_found++;
+    else
+      subset_not_found++;
 
     // Initial Sort, get the pivot and its potential score
     sort_list_by_id(postings_lists);
@@ -532,118 +557,14 @@ public:
     return res;
   }
 
-#ifdef SUBSET_THRESHOLD
-  std::vector<std::string> subset_gen3(const std::vector<query_token>& tokens) {
-    int n = tokens.size();
-    std::vector<std::string> subsets;
-    int i = 0;
-    int j = i + 1;
-    int k = j + 1;
-
-    while (i < n - 2) {
-      while (j < n - 1) {
-        while (k < n) {
-          std::string subset = tokens[i].token_str + " " + tokens[j].token_str +
-                               " " + tokens[k].token_str;
-          subsets.push_back(subset);
-          k++;
-        }
-        j++;
-        k = j + 1;
-      }
-      i++;
-      j = i + 1;
-      k = j + 1;
-    }
-
-    return subsets;
-  }
-
-  std::vector<std::string> subset_gen2(const std::vector<query_token>& tokens) {
-    int n = tokens.size();
-    std::vector<std::string> subsets;
-    int i = 0;
-    int j = i + 1;
-
-    while (i < n - 1) {
-      while (j < n) {
-        std::string subset = tokens[i].token_str + " " + tokens[j].token_str;
-        subsets.push_back(subset);
-        j++;
-      }
-      i++;
-      j = i + 1;
-    }
-    return subsets;
-  }
-
-  std::vector<std::string> subset_gen1(const std::vector<query_token>& tokens) {
-    int n = tokens.size();
-    std::vector<std::string> subsets;
-    int i = 0;
-
-    while (i < n) {
-      std::string subset = tokens[i].token_str;
-      subsets.push_back(subset);
-      i++;
-    }
-    return subsets;
-  }
-
-  bool subset_max_exists(const std::vector<std::string>& subsets,
-                         double& max_threshold) {
-    bool exists = false;
-
-    for (const auto& s : subsets) {
-      bool in_cache = cache.find(s) != cache.end();
-
-      if (in_cache) {
-        exists = true;
-        double threshold = cache[s];
-        if (threshold > max_threshold)
-          max_threshold = threshold;
-      }
-    }
-
-    return exists;
-  }
-
-  double lowerbound_threshold(const query_t& query) {
-    double threshold = 0.0;
-    std::vector<query_token> tokens = query.tokens;
-    int tokens_len = tokens.size();
-
-    if (tokens_len > 3) {
-      std::vector<std::string> subsets3 = subset_gen3(tokens);
-
-      if (subset_max_exists(subsets3, threshold))
-        return threshold;
-    }
-
-    if (tokens_len > 2) {
-      std::vector<std::string> subsets2 = subset_gen2(tokens);
-
-      if (subset_max_exists(subsets2, threshold))
-        return threshold;
-    }
-
-    if (tokens_len > 1) {
-      std::vector<std::string> subsets1 = subset_gen1(tokens);
-
-      subset_max_exists(subsets1, threshold);
-    }
-
-    return threshold;
-  }
-#else
-  double lowerbound_threshold(const query_t& query) {
-    return 0.0;
-  }
-#endif
-
   double hit_rate() {
     std::uint32_t total = cache_miss + cache_hit;
     return static_cast<double>(cache_hit) / static_cast<double>(total);
+  }
+
+  double subset_found_rate() {
+    std::uint32_t total = subset_found + subset_not_found;
+    return static_cast<double>(subset_found) / static_cast<double>(total);
   }
 
   // BlockMax Wand Disjunctive
@@ -655,7 +576,13 @@ public:
     std::priority_queue<doc_score,std::vector<doc_score>,
                         std::greater<doc_score>> score_heap;
     bool heap_full = false;
-    double threshold = lowerbound_threshold(query);
+    double threshold = lowerbound_threshold(query, cache);
+
+    if (threshold > 0.0)
+      subset_found++;
+    else
+      subset_not_found++;
+
     sort_list_by_id(postings_lists);
     auto pivot_and_score = determine_candidate(
         postings_lists, threshold);
@@ -766,7 +693,7 @@ public:
   }
 
 
-  result search(const query_t& qry, const size_t k,
+  result search(query_t& qry, const size_t k,
                 const index_form t_index_type,
                 const query_traversal t_index_traversal) {
 
@@ -774,8 +701,9 @@ public:
     std::vector<plist_wrapper> pl_data(qry.tokens.size());
     std::vector<plist_wrapper*> postings_lists;
     size_t j=0;
-    for (const auto& qry_token : qry.tokens) {
+    for (auto& qry_token : qry.tokens) {
       pl_data[j] = plist_wrapper(m_postings_lists[qry_token.token_id]);
+      qry_token.df = pl_data[j].f_t;
       postings_lists.emplace_back(&(pl_data[j]));
       m_conjunctive_max += pl_data[j].list_max_score;
       ++j;

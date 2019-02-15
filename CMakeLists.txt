@@ -15,8 +15,6 @@ INCLUDE_DIRECTORIES(${CMAKE_HOME_DIRECTORY}/include
 
 LINK_DIRECTORIES(${CMAKE_BINARY_DIR}/external/sdsl-lite/lib)
 
-OPTION(SUBSET_THRESHOLD "Generate subsets to look for in cache" OFF)
-
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   set(OPT "-O0")
   message("Debug")
@@ -35,10 +33,6 @@ ADD_LIBRARY(fastpfor_lib STATIC external/fastpfor/src/bitpacking.cpp
                                 external/fastpfor/src/simdunalignedbitpacking.cpp
                                 external/fastpfor/src/simdbitpacking.cpp)
 
-ADD_EXECUTABLE(search_index src/search_index.cpp src/compress_qmx.cpp)
-
-if(SUBSET_THRESHOLD)
-  target_compile_definitions(search_index PUBLIC SUBSET_THRESHOLD)
-endif(SUBSET_THRESHOLD)
+ADD_EXECUTABLE(search_index src/search_index.cpp src/compress_qmx.cpp src/lowerbound_threshold.cpp)
 
 TARGET_LINK_LIBRARIES(search_index sdsl divsufsort divsufsort64 pthread fastpfor_lib)

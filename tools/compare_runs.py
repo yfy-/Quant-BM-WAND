@@ -10,7 +10,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--time-files", nargs="*", required=True)
     parser.add_argument("-n", "--names", nargs="*", required=True)
-    parser.add_argument("-q", "--qlen", type=int, default=20)
+    parser.add_argument("-q", "--qlen", type=int, default=6)
     parser.add_argument("out")
     args = parser.parse_args()
 
@@ -37,6 +37,27 @@ def main():
         of.write("\n")
 
         np.savetxt(of, to_csv, fmt="%.3f", delimiter=',')
+
+    if len(args.time_files) == 2:
+        first_total = np.sum(to_csv[:, 1] * to_csv[:, 2])
+        second_total = np.sum(to_csv[:, 1] * to_csv[:, 3])
+
+        superior_i = 0 if first_total < second_total else 1
+        other_i = np.absolute(superior_i - 1)
+
+        gain = np.absolute(first_total - second_total) / np.max((first_total,
+                                                                second_total))
+        totals = [first_total, second_total]
+
+        superior_name = args.names[superior_i]
+        other_name = args.names[other_i]
+
+        print("{} total time (s) is {}".format(superior_name,
+                                               totals[superior_i] / 1000))
+        print("{} total time (s) is {}".format(other_name,
+                                               totals[other_i] / 1000))
+        print("{} has {:.3f} gains over {}".format(
+            superior_name, gain, other_name))
 
     plt.xlabel("Query Lengths")
     plt.ylabel("Avg Time (ms)")
@@ -82,7 +103,6 @@ def avg_time_qlen(time_file, until_qlen):
 
     return qlens[qlen_sort_ind], qcounts[qlen_sort_ind], \
         avg_times[qlen_sort_ind]
-
 
 if __name__ == "__main__":
     main()
