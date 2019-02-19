@@ -142,6 +142,14 @@ double hr4_threshold(const query_t& query, const cache_t& cache) {
   return 0.0;
 }
 
+double ts_threshold(const query_t& query, const cache_t& cache,
+                    const cache_t& term_cache) {
+  std::vector<std::string> subsets1 = gen_subsets(query.tokens, 1);
+  double max_threshold = 0.0;
+  subset_max_exists(subsets1, max_threshold, term_cache);
+  return max_threshold;
+}
+
 double hr1_ts_threshold(const query_t& query, const cache_t& cache,
                         const cache_t& term_cache) {
   double max_threshold = ts_threshold(query, cache, term_cache);
@@ -163,10 +171,22 @@ double hr1_ts_threshold(const query_t& query, const cache_t& cache,
   return max_threshold;
 }
 
-double ts_threshold(const query_t& query, const cache_t& cache,
-                    const cache_t& term_cache) {
-  std::vector<std::string> subsets1 = gen_subsets(query.tokens, 1);
-  double max_threshold = 0.0;
-  subset_max_exists(subsets1, max_threshold, term_cache);
+double hr2_ts_threshold(const query_t& query, const cache_t& cache,
+                        const cache_t& term_cache) {
+  double max_threshold = ts_threshold(query, cache, term_cache);
+
+  std::vector<query_token> tokens = query.tokens;
+  int len_tokens = tokens.size();
+
+  if (len_tokens > 3) {
+    std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
+    subset_max_exists(subsets3, max_threshold, cache);
+  }
+
+  if (len_tokens > 2) {
+    std::vector<std::string> subsets2 = gen_subsets(tokens, 2);
+    subset_max_exists(subsets2, max_threshold, cache);
+  }
+
   return max_threshold;
 }

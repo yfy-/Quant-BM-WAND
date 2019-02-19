@@ -32,6 +32,9 @@ double hr3_threshold(const query_t& query, const cache_t& cache);
  */
 double hr4_threshold(const query_t& query, const cache_t& cache);
 
+double ts_threshold(const query_t& query, const cache_t& cache,
+                    const cache_t& term_cache);
+
 /* Heuristic-1 with Term cache
    Use Heuristic-1 with an additional term cache where terms score are
    pre-computed and are in a separate cache.
@@ -39,7 +42,7 @@ double hr4_threshold(const query_t& query, const cache_t& cache);
 double hr1_ts_threshold(const query_t& query, const cache_t& cache,
                         const cache_t& term_cache);
 
-double ts_threshold(const query_t& query, const cache_t& cache,
-                    const cache_t& term_cache);
+double hr2_ts_threshold(const query_t& query, const cache_t& cache,
+                        const cache_t& term_cache);
 
 #endif  // LOWERBOUND_THRESHOLD_HPP
