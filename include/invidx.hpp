@@ -152,8 +152,10 @@ public:
       lowerbound_threshold = &hr3_threshold;
     else if (method == "HR4")
       lowerbound_threshold = &hr4_threshold;
-    else if (method == "HR1T")
-      lowerbound_threshold_term = &hr1t_threshold;
+    else if (method == "TS")
+      lowerbound_threshold_term = &ts_threshold;
+    else if (method == "HR1_TS")
+      lowerbound_threshold_term = &hr1_ts_threshold;
     else
       lowerbound_threshold = &naive_threshold;
   }

@@ -48,9 +48,7 @@ std::vector<std::string> gen_subsets(const std::vector<query_token>& tokens,
   std::uint32_t n = tokens.size();
   std::vector<std::string> subsets;
 
-  // Normally the interval would be inclusive
-  // but for practical reasons it is exclusive
-  if (r > 0 && r < n) {
+  if (r > 0) {
     std::vector<std::uint32_t> ptrs(r);
     std::iota(std::begin(ptrs), std::end(ptrs), 0);
 
@@ -144,24 +142,12 @@ double hr4_threshold(const query_t& query, const cache_t& cache) {
   return 0.0;
 }
 
-double hr1t_threshold(const query_t& query, const cache_t& cache,
-                      const cache_t& term_cache) {
+double hr1_ts_threshold(const query_t& query, const cache_t& cache,
+                        const cache_t& term_cache) {
+  double max_threshold = ts_threshold(query, cache, term_cache);
+
   std::vector<query_token> tokens = query.tokens;
   int len_tokens = tokens.size();
-
-  if (len_tokens == 1 && term_cache.find(query.query_str) != term_cache.end())
-    return term_cache.at(query.query_str);
-
-  std::vector<std::string> subsets1 = gen_subsets(tokens, 1);
-  double max_threshold = 0.0;
-
-  for (auto s : subsets1) {
-    if (term_cache.find(s) != term_cache.end()) {
-      double sub_threshold = term_cache.at(s);
-      if (sub_threshold > max_threshold)
-        max_threshold = sub_threshold;
-    }
-  }
 
   if (len_tokens > 3) {
     std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
@@ -174,5 +160,13 @@ double hr1t_threshold(const query_t& query, const cache_t& cache,
     subset_max_exists(subsets2, max_threshold, cache);
   }
 
+  return max_threshold;
+}
+
+double ts_threshold(const query_t& query, const cache_t& cache,
+                    const cache_t& term_cache) {
+  std::vector<std::string> subsets1 = gen_subsets(query.tokens, 1);
+  double max_threshold = 0.0;
+  subset_max_exists(subsets1, max_threshold, term_cache);
   return max_threshold;
 }
