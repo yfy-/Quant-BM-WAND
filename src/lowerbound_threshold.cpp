@@ -143,3 +143,36 @@ double hr4_threshold(const query_t& query, const cache_t& cache) {
 
   return 0.0;
 }
+
+double hr1t_threshold(const query_t& query, const cache_t& cache,
+                      const cache_t& term_cache) {
+  std::vector<query_token> tokens = query.tokens;
+  int len_tokens = tokens.size();
+
+  if (len_tokens == 1 && term_cache.find(query.query_str) != term_cache.end())
+    return term_cache.at(query.query_str);
+
+  std::vector<std::string> subsets1 = gen_subsets(tokens, 1);
+  double max_threshold = 0.0;
+
+  for (auto s : subsets1) {
+    if (term_cache.find(s) != term_cache.end()) {
+      double sub_threshold = term_cache.at(s);
+      if (sub_threshold > max_threshold)
+        max_threshold = sub_threshold;
+    }
+  }
+
+  if (len_tokens > 3) {
+    std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
+    if (subset_max_exists(subsets3, max_threshold, cache))
+      return max_threshold;
+  }
+
+  if (len_tokens > 2) {
+    std::vector<std::string> subsets2 = gen_subsets(tokens, 2);
+    subset_max_exists(subsets2, max_threshold, cache);
+  }
+
+  return max_threshold;
+}

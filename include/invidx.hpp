@@ -43,12 +43,32 @@ private:
   std::vector<plist_type> m_postings_lists;
   std::unique_ptr<ranker_type> ranker;
   cache_t cache;
+  cache_t term_cache;
   bool dyn_cache;
   std::uint32_t cache_hit;
   std::uint32_t cache_miss;
   std::uint32_t subset_found;
   std::uint32_t subset_not_found;
   double (*lowerbound_threshold)(const query_t&, const cache_t&);
+  double (*lowerbound_threshold_term)(const query_t&, const cache_t&,
+                                      const cache_t&);
+
+  void load_cache(const std::string& cache_file, cache_t& load_cache) {
+    std::ifstream cache_fs(cache_file);
+
+    if (cache_fs.is_open()) {
+      std::string cache_line;
+
+      while (std::getline(cache_fs, cache_line)) {
+        size_t delim_pos = cache_line.find(";");
+        std::string query = cache_line.substr(0, delim_pos);
+        double threshold = std::stod(cache_line.substr(delim_pos + 1));
+        load_cache[query] = threshold;
+      }
+    } else {
+      std::cerr << "Cannot load cache with file " << cache_file << "\n";
+    }
+  }
 
 public:
   idx_invfile() = default;
@@ -77,6 +97,7 @@ public:
     subset_found = 0;
     subset_not_found = 0;
     lowerbound_threshold = &naive_threshold;
+    lowerbound_threshold_term = nullptr;
   }
 
   auto serialize(std::ostream& out,
@@ -106,21 +127,12 @@ public:
     }
   }
 
-  void load_cache(const std::string cache_file) {
-    std::ifstream cache_fs(cache_file);
+  void load_cache(const std::string& cache_file) {
+    load_cache(cache_file, cache);
+  }
 
-    if (cache_fs.is_open()) {
-      std::string cache_line;
-
-      while (std::getline(cache_fs, cache_line)) {
-        size_t delim_pos = cache_line.find(";");
-        std::string query = cache_line.substr(0, delim_pos);
-        double threshold = std::stod(cache_line.substr(delim_pos + 1));
-        cache[query] = threshold;
-      }
-    } else {
-      std::cerr << "Cannot load cache with file " << cache_file << "\n";
-    }
+  void load_term_cache(const std::string& cache_file) {
+    load_cache(cache_file, term_cache);
   }
 
   void set_dyn_cache(bool enable) {
@@ -140,6 +152,8 @@ public:
       lowerbound_threshold = &hr3_threshold;
     else if (method == "HR4")
       lowerbound_threshold = &hr4_threshold;
+    else if (method == "HR1T")
+      lowerbound_threshold_term = &hr1t_threshold;
     else
       lowerbound_threshold = &naive_threshold;
   }
@@ -464,7 +478,12 @@ public:
 
     bool heap_full = false;
     // init list processing
-    double threshold = lowerbound_threshold(query, cache);
+    double threshold = 0.0;
+
+    if (lowerbound_threshold_term)
+      threshold = lowerbound_threshold_term(query, cache, term_cache);
+    else
+      threshold = lowerbound_threshold(query, cache);
 
     if (threshold > 0.0)
       subset_found++;
@@ -576,7 +595,12 @@ public:
     std::priority_queue<doc_score,std::vector<doc_score>,
                         std::greater<doc_score>> score_heap;
     bool heap_full = false;
-    double threshold = lowerbound_threshold(query, cache);
+    double threshold = 0.0;
+
+    if (lowerbound_threshold_term)
+      threshold = lowerbound_threshold_term(query, cache, term_cache);
+    else
+      threshold = lowerbound_threshold(query, cache);
 
     if (threshold > 0.0)
       subset_found++;

@@ -25,11 +25,18 @@ double hr2_threshold(const query_t& query, const cache_t& cache);
  */
 double hr3_threshold(const query_t& query, const cache_t& cache);
 
-/* Heuristic-3
+/* Heuristic-4
  * Generate subsets in decreased order by the token document frequency
  * Return first found, since it is guaranteed to be maximum of remaining to be
  * generated subsets
  */
 double hr4_threshold(const query_t& query, const cache_t& cache);
+
+/* Heuristic-1 with Term cache
+   Use Heuristic-1 with an additional term cache where terms score are
+   pre-computed and are in a separate cache.
+ */
+double hr1t_threshold(const query_t& query, const cache_t& cache,
+                      const cache_t& term_cache);
 
 #endif  // LOWERBOUND_THRESHOLD_HPP

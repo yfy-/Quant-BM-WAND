@@ -3,6 +3,7 @@
 #include <iostream>
 #include <iomanip>
 #include <ctime>
+#include <string>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -27,6 +28,7 @@ typedef struct cmdargs {
   query_traversal traversal;
   std::string traversal_string;
   std::string cache_file;
+  std::string term_cache_file;
   bool dyn_cache;
   bool report_only_time;
   std::uint32_t num_runs;
@@ -40,11 +42,12 @@ void print_usage(std::string program) {
             << " -z <F: aggression parameter. 1.0 is rank-safe>"
             << " -o <output file handle>"
             << " -t <traversal type: AND|OR>"
-            << " -f <result file to cache statically>"
+            << " -f <static cache file>"
             << " -d <cache dynamically>"
             << " -r <only report time logs>"
             << " -n <number of runs>"
-            << " -m <threshold method: HR1|HR2|HR3|HR4, default is NAIVE>"
+            << " -m <threshold method: HR1|HR2|HR3|HR4|HR1T, default is NAIVE>"
+            << " -e <term static cache file>"
             << std::endl;
   exit(EXIT_FAILURE);
 }
@@ -61,11 +64,12 @@ parse_args(int argc, char* const argv[])
   args.k = 10;
   args.F_boost = 1.0;
   args.cache_file = "";
+  args.term_cache_file = "";
   args.dyn_cache = false;
   args.report_only_time = false;
   args.num_runs = 3;
   args.threshold_method = "NAIVE";
-  while ((op=getopt(argc,argv,"c:q:k:z:o:t:f:drn:m:")) != -1) {
+  while ((op=getopt(argc,argv,"c:q:k:z:o:t:f:e:drn:m:")) != -1) {
     switch (op) {
       case 'c':
         args.collection_dir = optarg;
@@ -97,6 +101,9 @@ parse_args(int argc, char* const argv[])
         break;
       case 'f':
         args.cache_file = optarg;
+        break;
+      case 'e':
+        args.term_cache_file = optarg;
         break;
       case 'd':
         args.dyn_cache = true;
@@ -218,6 +225,10 @@ main (int argc,char* const argv[])
   std::map<uint64_t, std::string> rewritten_queries;
 
   std::cout << "Times are the average across " << args.num_runs << " runs.\n";
+
+  if (args.term_cache_file != "")
+    index.load_term_cache(args.term_cache_file);
+
   for(size_t i = 0; i < args.num_runs; i++) {
     if (args.cache_file != "") {
       std::cout << "Loading static cache with " << args.cache_file << "\n";
