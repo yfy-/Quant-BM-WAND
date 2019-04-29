@@ -253,11 +253,13 @@ main (int argc,char* const argv[])
       std::cerr << " TIME = " << std::setprecision(5)
                 << query_time.count() / 1000.0 << " ms\r";
 
-      auto itr = query_times.find(id);
-      if(itr != query_times.end()) {
-        itr->second += query_time;
-      } else {
-        query_times[id] = query_time;
+      if (args.num_runs < 3 || i > 0) {
+        auto itr = query_times.find(id);
+        if(itr != query_times.end()) {
+          itr->second += query_time;
+        } else {
+          query_times[id] = query_time;
+        }
       }
 
       if(i==0) {
