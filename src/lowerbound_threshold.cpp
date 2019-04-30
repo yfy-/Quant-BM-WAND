@@ -48,7 +48,7 @@ std::vector<std::string> gen_subsets(const std::vector<query_token>& tokens,
   std::uint32_t n = tokens.size();
   std::vector<std::string> subsets;
 
-  if (r > 0) {
+  if (r <= n && r > 0) {
     std::vector<std::uint32_t> ptrs(r);
     std::iota(std::begin(ptrs), std::end(ptrs), 0);
 
