@@ -17,7 +17,7 @@ if args.merge:
         merge_cache_lines = mf.readlines()
 
     for mcl in merge_cache_lines:
-        q, t = mcl.split(";")
+        q, t = mcl.rstrip().split(";")
         query_threshold[q] = t
 
 trec_tokens = None
