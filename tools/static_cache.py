@@ -7,9 +7,18 @@ parser.add_argument("trec_file", help="TREC output of processed queries")
 parser.add_argument("query_file", help="Query file")
 parser.add_argument("out_file", help="Out file")
 parser.add_argument("-k", "--top-k", type=int, help="Cache k'th document")
+parser.add_argument("-m", "--merge", help="Merge with a previous cache file")
 args = parser.parse_args()
 
-query_threshold = []
+query_threshold = dict()
+
+if args.merge:
+    with open(args.merge) as mf:
+        merge_cache_lines = mf.readlines()
+
+    for mcl in merge_cache_lines:
+        q, t = mcl.split(";")
+        query_threshold[q] = t
 
 trec_tokens = None
 
@@ -40,8 +49,8 @@ with open(args.trec_file) as tf, open(args.query_file) as qf:
             trec_tokens = None
 
         if score > 0:
-            query_threshold.append((query, score))
+            query_threshold[query] = score
 
 with open(args.out_file, "w") as of:
-    for query, threshold in query_threshold:
+    for query, threshold in query_threshold.items():
         of.write("{};{}\n".format(query, threshold))
