@@ -224,7 +224,13 @@ main (int argc,char* const argv[])
   std::map<uint64_t,uint64_t> query_lengths;
   std::map<uint64_t, std::string> rewritten_queries;
 
-  std::cout << "Times are the average across " << args.num_runs << " runs.\n";
+  size_t avg_num_run = args.num_runs;
+  if (args.num_runs > 2) {
+    std::cout << "Omitting first query run time since n > 2\n";
+    avg_num_run--;
+  }
+
+  std::cout << "Times are the average across " << avg_num_run << " runs.\n";
 
   if (args.term_cache_file != "")
     index.load_term_cache(args.term_cache_file);
@@ -285,7 +291,7 @@ main (int argc,char* const argv[])
 
   // Average the times
   for(auto& timing : query_times) {
-    timing.second = timing.second / args.num_runs;
+    timing.second = timing.second / avg_num_run;
   }
 
   std::string time_file = args.output_prefix + "-time.log";

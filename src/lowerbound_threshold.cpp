@@ -76,19 +76,20 @@ double naive_threshold(const query_t& query, const cache_t& cache) {
 double hr1_threshold(const query_t& query, const cache_t& cache) {
   double threshold = 0.0;
   std::vector<query_token> tokens = query.tokens;
+  int len_tokens = tokens.size();
 
-  std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
+  if (len_tokens > 3) {
+    if (subset_max_exists(gen_subsets(tokens, 3), threshold, cache))
+      return threshold;
+  }
 
-  if (subset_max_exists(subsets3, threshold, cache))
-    return threshold;
+  if (len_tokens > 2) {
+    if (subset_max_exists(gen_subsets(tokens, 2), threshold, cache))
+      return threshold;
+  }
 
-  std::vector<std::string> subsets2 = gen_subsets(tokens, 2);
-
-  if (subset_max_exists(subsets2, threshold, cache))
-    return threshold;
-
-  std::vector<std::string> subsets1 = gen_subsets(tokens, 1);
-  subset_max_exists(subsets1, threshold, cache);
+  if (len_tokens > 1)
+    subset_max_exists(gen_subsets(tokens, 1), threshold, cache);
 
   return threshold;
 }
@@ -96,14 +97,24 @@ double hr1_threshold(const query_t& query, const cache_t& cache) {
 double hr2_threshold(const query_t& query, const cache_t& cache) {
   double threshold = 0.0;
   std::vector<query_token> tokens = query.tokens;
-  std::vector<std::string> subsets = gen_subsets(tokens, 3);
-  std::vector<std::string> subsets2 = gen_subsets(tokens, 2);
+  int len_tokens = tokens.size();
+  std::vector<std::string> subsets;
 
-  subsets.insert(std::end(subsets), std::begin(subsets2), std::end(subsets2));
+  if (len_tokens > 3) {
+    std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
+    subsets.insert(subsets.end(), subsets3.begin(), subsets3.end());
+  }
 
-  std::vector<std::string> subsets1 = gen_subsets(tokens, 1);
+  if (len_tokens > 2) {
+    std::vector<std::string> subsets2 = gen_subsets(tokens, 2);
+    subsets.insert(subsets.end(), subsets2.begin(), subsets2.end());
+  }
 
-  subsets.insert(std::end(subsets), std::begin(subsets1), std::end(subsets1));
+  if (len_tokens > 1) {
+    std::vector<std::string> subsets1 = gen_subsets(tokens, 1);
+    subsets.insert(subsets.end(), subsets1.begin(), subsets1.end());
+  }
+
   subset_max_exists(subsets, threshold, cache);
   return threshold;
 }
@@ -177,16 +188,18 @@ double hr2_ts_threshold(const query_t& query, const cache_t& cache,
 
   std::vector<query_token> tokens = query.tokens;
   int len_tokens = tokens.size();
+  std::vector<std::string> subsets;
 
   if (len_tokens > 3) {
     std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
-    subset_max_exists(subsets3, max_threshold, cache);
+    subsets.insert(subsets.end(), subsets3.begin(), subsets3.end());
   }
 
   if (len_tokens > 2) {
     std::vector<std::string> subsets2 = gen_subsets(tokens, 2);
-    subset_max_exists(subsets2, max_threshold, cache);
+    subsets.insert(subsets.end(), subsets2.begin(), subsets2.end());
   }
 
+  subset_max_exists(subsets, max_threshold, cache);
   return max_threshold;
 }
