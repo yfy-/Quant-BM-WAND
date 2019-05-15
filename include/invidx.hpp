@@ -474,7 +474,8 @@ public:
   // Wand Disjunctive Algorithm
   result process_wand_disjunctive(std::vector<plist_wrapper*>& postings_lists,
                                   const query_t& query,
-                                  const size_t k) {
+                                  const size_t k,
+                                  query_stat& stat) {
     result res;
     // heap containing the top-k docs
     std::priority_queue<doc_score,std::vector<doc_score>,
@@ -488,6 +489,8 @@ public:
       threshold = lowerbound_threshold_term(query, cache, term_cache);
     else
       threshold = lowerbound_threshold(query, cache);
+
+    stat.lowerbound_threshold = threshold;
 
     if (threshold > 0.0)
       subset_found++;
@@ -521,6 +524,8 @@ public:
       potential_score = std::get<1>(pivot_and_score);
 
     }
+
+    stat.actual_threshold = threshold;
 
     // return the top-k results
     res.list.resize(score_heap.size());
@@ -593,7 +598,7 @@ public:
   // BlockMax Wand Disjunctive
   result process_bmw_disjunctive(std::vector<plist_wrapper*>& postings_lists,
                                  const query_t& query,
-                                 const size_t k) {
+                                 const size_t k, query_stat& stat) {
     result res;
     // heap containing the top-k docs
     std::priority_queue<doc_score,std::vector<doc_score>,
@@ -605,6 +610,8 @@ public:
       threshold = lowerbound_threshold_term(query, cache, term_cache);
     else
       threshold = lowerbound_threshold(query, cache);
+
+    stat.lowerbound_threshold = threshold;
 
     if (threshold > 0.0)
       subset_found++;
@@ -651,6 +658,8 @@ public:
 
     if (dyn_cache)
       cache[query.query_str] = threshold;
+
+    stat.actual_threshold = threshold;
 
     // return the top-k results
     res.list.resize(score_heap.size());
@@ -723,7 +732,8 @@ public:
 
   result search(query_t& qry, const size_t k,
                 const index_form t_index_type,
-                const query_traversal t_index_traversal) {
+                const query_traversal t_index_traversal,
+                query_stat& stat) {
 
     m_conjunctive_max = 0.0f; // Reset for new query
     std::vector<plist_wrapper> pl_data(qry.tokens.size());
@@ -740,6 +750,7 @@ public:
     if (t_index_traversal == OR) {
       if (cache.find(qry.query_str) != cache.end()) {
         cache_hit++;
+        stat.cache_hit = true;
         return result();
       } else {
         cache_miss++;
@@ -750,14 +761,14 @@ public:
     // Disable conjunctive processing temporarily
     if (t_index_type == BMW) {
       if (t_index_traversal == OR)
-        return process_bmw_disjunctive(postings_lists, qry, k);
+        return process_bmw_disjunctive(postings_lists, qry, k, stat);
       // else if (t_index_traversal == AND)
       //   return process_bmw_conjunctive(postings_lists,k);
     }
 
     else if (t_index_type == WAND) {
       if (t_index_traversal == OR)
-        return process_wand_disjunctive(postings_lists, qry, k);
+        return process_wand_disjunctive(postings_lists, qry, k, stat);
       // else if (t_index_traversal == AND)
       //   return process_wand_conjunctive(postings_lists,k);
     }

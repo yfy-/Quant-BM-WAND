@@ -54,6 +54,15 @@ struct query_token{
     }
 };
 
+struct query_stat {
+  double lowerbound_threshold;
+  double actual_threshold;
+  bool cache_hit;
+
+  query_stat() : lowerbound_threshold{0.0}, actual_threshold{0.0},
+                 cache_hit {false} {}
+};
+
 struct query_t {
     uint64_t query_id;
     std::string query_str;
