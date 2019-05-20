@@ -190,14 +190,9 @@ double hr2_ts_threshold(const query_t& query, const cache_t& cache,
   int len_tokens = tokens.size();
   std::vector<std::string> subsets;
 
-  if (len_tokens > 3) {
-    std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
-    subsets.insert(subsets.end(), subsets3.begin(), subsets3.end());
-  }
-
-  if (len_tokens > 2) {
-    std::vector<std::string> subsets2 = gen_subsets(tokens, 2);
-    subsets.insert(subsets.end(), subsets2.begin(), subsets2.end());
+  for (int i = std::min(len_tokens - 1, 6); i > 1; --i) {
+    std::vector<std::string> subsets_i = gen_subsets(tokens, i);
+    subsets.insert(subsets.end(), subsets_i.begin(), subsets_i.end());
   }
 
   subset_max_exists(subsets, max_threshold, cache);
