@@ -152,6 +152,8 @@ public:
       lowerbound_threshold = &hr3_threshold;
     else if (method == "HR4")
       lowerbound_threshold = &hr4_threshold;
+    else if (method == "ALL")
+      lowerbound_threshold = &all_threshold;
     else if (method == "TS")
       lowerbound_threshold_term = &ts_threshold;
     else if (method == "HR1_TS")

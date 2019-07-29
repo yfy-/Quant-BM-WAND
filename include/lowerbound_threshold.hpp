@@ -32,6 +32,8 @@ double hr3_threshold(const query_t& query, const cache_t& cache);
  */
 double hr4_threshold(const query_t& query, const cache_t& cache);
 
+double all_threshold(const query_t& query, const cache_t& cache);
+
 double ts_threshold(const query_t& query, const cache_t& cache,
                     const cache_t& term_cache);
 

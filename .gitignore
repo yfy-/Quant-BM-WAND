@@ -2,6 +2,7 @@
 *.swp
 *.swn
 *.o
+*.warc.gz
 TAGS
 tags
 CMakeFiles
@@ -39,3 +40,6 @@ bin/wand_search
 src/kstem_query
 src/mk_impact_idx
 build-*
+GPATH
+GRTAGS
+GTAGS

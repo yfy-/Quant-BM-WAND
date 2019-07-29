@@ -127,7 +127,7 @@ double hr3_threshold(const query_t& query, const cache_t& cache) {
   return threshold;
 }
 
-double hr4_threshold(const query_t& query, const cache_t& cache) {
+double hr4_threshold_old(const query_t& query, const cache_t& cache) {
   std::vector<query_token> tokens = query.tokens;
   std::vector<query_token> tokens_df_sorted(std::begin(tokens),
                                             std::end(tokens));
@@ -152,6 +152,49 @@ double hr4_threshold(const query_t& query, const cache_t& cache) {
 
   return 0.0;
 }
+
+double hr4_threshold(const query_t& query, const cache_t& cache) {
+  std::vector<query_token> tokens = query.tokens;
+  std::vector<query_token> tokens_df_sorted(tokens.begin(), tokens.end());
+
+  // Sort descending by doc freq
+  std::sort(std::begin(tokens_df_sorted), std::end(tokens_df_sorted),
+            [](const query_token& a, const query_token& b) -> bool {
+              return a.df > b.df;
+            });
+
+  std::size_t max_subset_len = std::min<std::size_t>(
+      3, tokens_df_sorted.size() - 1);
+
+  auto tdf_begin = tokens_df_sorted.begin();
+  std::vector<query_token> max_subset(tdf_begin, tdf_begin + max_subset_len);
+  std::sort(max_subset.begin(), max_subset.end());
+  std::vector<std::string> subsets;
+  for (int i = max_subset_len; i > 0; --i) {
+    std::vector<std::string> subsets_i = gen_subsets(max_subset, i);
+    subsets.insert(subsets.end(), subsets_i.begin(), subsets_i.end());
+  }
+
+  double threshold = 0.0;
+  subset_max_exists(subsets, threshold, cache);
+  return threshold;
+}
+
+double all_threshold(const query_t& query, const cache_t& cache) {
+  std::vector<query_token> tokens = query.tokens;
+  std::vector<std::string> subsets;
+  std::size_t start_len_subset = tokens.size() - 1;
+
+  for (std::size_t i = start_len_subset; i > 0; --i) {
+    std::vector<std::string> ilen_subsets = gen_subsets(tokens, i);
+    subsets.insert(subsets.end(), ilen_subsets.begin(), ilen_subsets.end());
+  }
+
+  double threshold = 0.0;
+  subset_max_exists(subsets, threshold, cache);
+  return threshold;
+}
+
 
 double ts_threshold(const query_t& query, const cache_t& cache,
                     const cache_t& term_cache) {
