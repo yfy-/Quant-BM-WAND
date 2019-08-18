@@ -142,6 +142,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  std::cout << "Loading cache\n";
   cache_t cache;
   std::ifstream cfile(argv[2]);
   if (cfile.is_open()) {
@@ -152,6 +153,7 @@ int main(int argc, char* argv[]) {
     }
   }
 
+  std::cout << "Benchmarking\n";
   int processed = 0;
   auto tot_t = std::chrono::duration<double>::zero();
 
