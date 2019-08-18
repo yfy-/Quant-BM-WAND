@@ -106,6 +106,21 @@ double hr2_threshold(const std::vector<std::string>& tokens,
   return threshold;
 }
 
+double all_threshold(const std::vector<std::string>& tokens,
+                     const cache_t& cache) {
+  double threshold = 0.0;
+  int len_tokens = tokens.size();
+  std::vector<std::string> subsets;
+
+  for (int i = len_tokens - 1; i > 0; --i) {
+    std::vector<std::string> ssubsets = gen_subsets(tokens, i);
+    subsets.insert(subsets.end(), ssubsets.begin(), ssubsets.end());
+  }
+
+  subset_max_exists(subsets, threshold, cache);
+  return threshold;
+}
+
 
 int main(int argc, char* argv[]) {
   std::cout << "Loading queries\n";
@@ -146,7 +161,7 @@ int main(int argc, char* argv[]) {
 
     processed++;
     auto start = std::chrono::high_resolution_clock::now();
-    double threshold = hr2_threshold(query_tokens[i], cache);
+    double threshold = all_threshold(query_tokens[i], cache);
     auto end = std::chrono::high_resolution_clock::now();
     tot_t += end - start;
   }
