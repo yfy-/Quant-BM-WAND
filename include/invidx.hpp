@@ -466,6 +466,7 @@ public:
     // resort
     sort_list_by_id(postings_lists);
 
+
     if (heap_full)
       return heap.top().score;
 
