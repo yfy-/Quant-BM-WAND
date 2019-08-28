@@ -2,7 +2,6 @@
 
 import argparse
 from collections import defaultdict
-from matplotlib import pyplot as plt
 import numpy as np
 
 
@@ -10,99 +9,67 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-t", "--time-files", nargs="*", required=True)
     parser.add_argument("-n", "--names", nargs="*", required=True)
-    parser.add_argument("-q", "--qlen", type=int, default=6)
-    parser.add_argument("out")
+    parser.add_argument("-q", "--qlen", type=int, default=5)
     args = parser.parse_args()
-
-    to_csv = None
+    avg_times = dict()
 
     for i, tf in enumerate(args.time_files):
-        qlens, qcounts, avg_times = avg_time_qlen(tf, args.qlen)
+        all_runs = load_tf(tf)
+        all_times = np.array([r.time_ms for r in all_runs])
+        crr_name = args.names[i]
+        avg_times[crr_name] = np.mean(all_times)
+        print("Run results for {}".format(crr_name))
+        print("Mean = {0:.3f}".format(avg_times[crr_name]))
+        print("Median = {0:.3f}".format(np.median(all_times)))
+        print("P95 = {0:.3f}".format(np.percentile(all_times, 95)))
+        print("P99 = {0:.3f}".format(np.percentile(all_times, 99)))
 
-        if to_csv is None:
-            to_csv = np.hstack((v2cmtrx(qlens), v2cmtrx(qcounts),
-                                v2cmtrx(avg_times)))
-        else:
-            to_csv = np.hstack((to_csv, v2cmtrx(avg_times)))
+        times_grouped = defaultdict(list)
+        for r in all_runs:
+            if r.num_terms >= args.qlen:
+                times_grouped[args.qlen].append(r.time_ms)
+            else:
+                times_grouped[r.num_terms].append(r.time_ms)
+        avg_by_qlen = args.qlen * [None]
 
-        plt.plot(qlens, avg_times, 'o', label=args.names[i])
+        for i in range(1, args.qlen + 1):
+            avg_by_qlen[i - 1] = np.mean(times_grouped[i])
 
-    with open(args.out, "w") as of:
-        of.write("query_length,")
-        of.write("query_count")
+        avg_times_str = ["{0:.3f}".format(aq) for aq in avg_by_qlen]
+        print("Mean by num_terms = {}".format(avg_times_str))
 
-        for name in args.names:
-            of.write(",{}".format(name))
+        avg_threshold_found = np.mean([r.low_threshold / r.act_threshold for r
+                                       in all_runs if r.act_threshold > 0])
+        print("Average threshold ratio = {0:.3f}".format(avg_threshold_found))
 
-        of.write("\n")
+    if len(args.names) == 2:
+        first_avg = avg_times[args.names[0]]
+        second_avg = avg_times[args.names[1]]
 
-        np.savetxt(of, to_csv, fmt="%.3f", delimiter=',')
+        print("Gain = {0:.3f}".format(abs(first_avg - second_avg) /
+                                      max(first_avg, second_avg)))
 
-    if len(args.time_files) == 2:
-        first_total = np.sum(to_csv[:, 1] * to_csv[:, 2])
-        second_total = np.sum(to_csv[:, 1] * to_csv[:, 3])
-
-        superior_i = 0 if first_total < second_total else 1
-        other_i = np.absolute(superior_i - 1)
-
-        gain = np.absolute(first_total - second_total) / np.max((first_total,
-                                                                second_total))
-        totals = [first_total, second_total]
-
-        superior_name = args.names[superior_i]
-        other_name = args.names[other_i]
-
-        print("{} total time (s) is {}".format(superior_name,
-                                               totals[superior_i] / 1000))
-        print("{} total time (s) is {}".format(other_name,
-                                               totals[other_i] / 1000))
-        print("{} has {:.3f} gains over {}".format(
-            superior_name, gain, other_name))
-
-    plt.xlabel("Query Lengths")
-    plt.ylabel("Avg Time (ms)")
-    plt.xticks(np.arange(1, args.qlen + 1))
-    plt.legend()
-    plt.show()
+class RunInfo:
+    def __init__(self, num_terms, time_ms, low_threshold,
+                 act_threshold):
+        self.num_terms = num_terms
+        self.time_ms = time_ms
+        self.low_threshold = low_threshold
+        self.act_threshold = act_threshold
 
 
-def v2cmtrx(vec):
-    return np.reshape(vec, (vec.size, 1))
-
-
-def avg_time_qlen(time_file, until_qlen):
+def load_tf(time_file):
     with open(time_file) as tf:
-        time_file_lines = tf.readlines()
+        tf_lines = tf.readlines()
 
-    qlen_to_tot_time = defaultdict(float)
-    qlen_count = defaultdict(int)
+    all_runs = []
+    for tl in tf_lines[1:]:
+        tokens = tl.split(";")
+        if not bool(int(tokens[9])):
+            all_runs.append(RunInfo(int(tokens[6]), float(tokens[7]),
+                                    int(tokens[10]), int(tokens[11])))
 
-    # First line is header
-    for tfl in time_file_lines[1:]:
-        # Only obtain query length and time
-        qlen_str, time_str = tfl.split(';')[6: 8]
-        qlen = int(qlen_str)
-        time = float(time_str)
-        if qlen and qlen <= until_qlen:
-            qlen_to_tot_time[qlen] += time
-            qlen_count[qlen] += 1
-
-    qlens = []
-    avg_times = []
-    qcounts = []
-
-    for qlen, qc in qlen_count.items():
-        qlens.append(qlen)
-        qcounts.append(qc)
-        avg_times.append(qlen_to_tot_time[qlen] / qlen_count[qlen])
-
-    qlens = np.array(qlens)
-    avg_times = np.array(avg_times)
-    qcounts = np.array(qcounts)
-    qlen_sort_ind = qlens.argsort()
-
-    return qlens[qlen_sort_ind], qcounts[qlen_sort_ind], \
-        avg_times[qlen_sort_ind]
+    return all_runs
 
 if __name__ == "__main__":
     main()
