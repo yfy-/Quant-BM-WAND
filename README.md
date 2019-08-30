@@ -1,10 +1,19 @@
 ATIRE-derived Quantized WAND/BMW
 ======================
 
+This fork extends Quant-BM-WAND to implement a score cache which keeps
+the k'th highest score of results of a query. The score can be used
+to speed up the query processing of WAND and BMW by yielding a
+lower-bound for the initial threshold.
+
 Reference
 ---------
-If you use this code for your own experiments, please cite the following work:
+If you use this code for your own experiments, please cite the following works:
 
+Erman Yafay, Ismail Sengor Altingovde, **Caching Scores for Faster
+Query Processing with Dynamic Pruning in Search Engines**. In The 28th
+ACM International Conference on Information and Knowledge Management
+(CIKM '2019).
 
 Matt Crane, J. Shane Culpepper, Jimmy Lin, Joel Mackenzie and Andrew Trotman,
 **A Comparison of Document-at-a-Time and Score-at-a-Time Query Evaluation.**
@@ -30,12 +39,12 @@ The licence is provided, see the LICENCE file.
 Usage
 =====
 Since all of the systems were implemented to use the same underlying index,
-which is an index from the ATIRE search engine, this ATIRE index must be 
+which is an index from the ATIRE search engine, this ATIRE index must be
 built before the Wand/BMW indexes can be built.
 
 We have provided an end-to-end script which will build the appropriate ATIRE
 index, construct the Wand/BMW indexes from this, and then run the subsequent
-queries. Please see: `run_gov2.sh` and `run_clueweb_09.sh`. 
+queries. Please see: `run_gov2.sh` and `run_clueweb_09.sh`.
 Note that the ATIRE syntax differs between GOV2 and ClueWeb collections,
 and that the `run_clueweb_09.sh` script will work for ClueWeb12 too.
 
@@ -82,5 +91,4 @@ Wish List/To Do
 ===============
 * In the original [WandBL](https://github.com/jsc/WANDbl) repo, the index is built using Indri as the initial indexer. This repo has the tools and code
 necessary to use Indri to build consumable indexes for this particular repo. The aim is to integrate this code here on a rainy day, but would also require
-the quantizer to be built in here too. 
-
+the quantizer to be built in here too.
