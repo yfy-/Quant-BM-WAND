@@ -233,7 +233,7 @@ double hr2_ts_threshold(const query_t& query, const cache_t& cache,
   int len_tokens = tokens.size();
   std::vector<std::string> subsets;
 
-  for (int i = std::min(len_tokens - 1, 6); i > 1; --i) {
+  for (int i = std::min(len_tokens - 1, 3); i > 1; --i) {
     std::vector<std::string> subsets_i = gen_subsets(tokens, i);
     subsets.insert(subsets.end(), subsets_i.begin(), subsets_i.end());
   }
