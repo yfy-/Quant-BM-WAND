@@ -288,7 +288,7 @@ public:
   potential_candidate(std::vector<plist_wrapper*>& postings_lists,
                       const typename std::vector<plist_wrapper*>::iterator&
                       pivot_list, const double threshold,
-                      const uint64_t doc_id, bool heap_full = false){
+                      const uint64_t doc_id){
 
     auto iter = postings_lists.begin();
     double block_max_score = (*pivot_list)->cur.block_max(); // pivot blockmax
@@ -301,8 +301,7 @@ public:
     }
 
     // block-max test
-    if ((heap_full && block_max_score > threshold) ||
-        (!heap_full && block_max_score >= threshold)) {
+    if (block_max_score > threshold) {
       return {true,block_max_score};
     }
     return {false,block_max_score};
@@ -322,7 +321,7 @@ public:
   // For disjunctive processing, can be used by BMW and Wand algos.
   std::pair<typename std::vector<plist_wrapper*>::iterator, double>
   determine_candidate(std::vector<plist_wrapper*>& postings_lists,
-                      double threshold, bool heap_full = false) {
+                      double threshold) {
 
     threshold = threshold * m_F; //Theta push
     double score = 0;
@@ -330,8 +329,7 @@ public:
     auto end = postings_lists.end();
     while(itr != end) {
       score += (*itr)->list_max_score;
-      if((heap_full && score > threshold) ||
-         (!heap_full && score >= threshold)) {
+      if (score > threshold) {
         // forward to last list equal to pivot
         auto pivot_id = (*itr)->cur.docid();
         auto next = itr+1;
@@ -390,10 +388,10 @@ public:
       itr++;
     }
 
-    if (heap_full && doc_score > threshold) {
-      heap.pop();
-      heap.push({doc_id, doc_score});
-    } else if (!heap_full && doc_score >= threshold) {
+    if (doc_score > threshold) {
+      if (heap_full)
+        heap.pop();
+
       heap.push({doc_id, doc_score});
     }
 
@@ -454,10 +452,10 @@ public:
       itr++;
     }
 
-    if (heap_full && doc_score > threshold) {
-      heap.pop();
-      heap.push({doc_id, doc_score});
-    } else if (!heap_full && doc_score >= threshold) {
+    if (doc_score > threshold) {
+      if (heap_full)
+        heap.pop();
+
       heap.push({doc_id, doc_score});
     }
 
@@ -495,10 +493,12 @@ public:
 
     stat.lowerbound_threshold = threshold;
 
-    if (threshold > 0.0)
+    if (threshold > 0.0) {
       subset_found++;
-    else
+      threshold -= 1e-9;
+    } else {
       subset_not_found++;
+    }
 
     // Initial Sort, get the pivot and its potential score
     sort_list_by_id(postings_lists);
@@ -521,8 +521,7 @@ public:
         forward_lists(postings_lists,pivot_list,(*pivot_list)->cur.docid());
       }
       // Grsb the next pivot and its potential score
-      pivot_and_score = determine_candidate(postings_lists, threshold,
-                                            heap_full);
+      pivot_and_score = determine_candidate(postings_lists, threshold);
       pivot_list = std::get<0>(pivot_and_score);
       potential_score = std::get<1>(pivot_and_score);
 
@@ -616,10 +615,12 @@ public:
 
     stat.lowerbound_threshold = threshold;
 
-    if (threshold > 0.0)
+    if (threshold > 0.0) {
+      threshold -= 1e-9;
       subset_found++;
-    else
+    } else {
       subset_not_found++;
+    }
 
     sort_list_by_id(postings_lists);
     auto pivot_and_score = determine_candidate(
@@ -631,7 +632,7 @@ public:
       uint64_t candidate_id = (*pivot_list)->cur.docid();
       // Second level candidate check
       auto candidate_and_score = potential_candidate(
-          postings_lists, pivot_list, threshold, candidate_id, heap_full);
+          postings_lists, pivot_list, threshold, candidate_id);
       auto candidate = std::get<0>(candidate_and_score);
       auto potential_score = std::get<1>(candidate_and_score);
       // If the document is still a candidate from BM scores
@@ -654,7 +655,7 @@ public:
       }
       // Grab a new pivot and keep going!
       pivot_and_score = determine_candidate(
-          postings_lists, threshold, heap_full);
+          postings_lists, threshold);
       pivot_list = std::get<0>(pivot_and_score);
       potential_score = std::get<1>(pivot_and_score);
     }

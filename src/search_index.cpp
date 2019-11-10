@@ -225,13 +225,6 @@ main (int argc,char* const argv[])
   std::map<uint64_t, std::string> rewritten_queries;
   std::map<uint64_t, query_stat> query_stats;
 
-  size_t avg_num_run = args.num_runs;
-  if (args.num_runs > 2) {
-    std::cout << "Omitting first query run time since n > 2\n";
-    avg_num_run--;
-  }
-
-  std::cout << "Times are the average across " << avg_num_run << " runs.\n";
 
   if (args.term_cache_file != "")
     index.load_term_cache(args.term_cache_file);
@@ -258,24 +251,20 @@ main (int argc,char* const argv[])
                                   stat);
       auto qry_stop = clock::now();
 
-      auto query_time = std::chrono::duration_cast<std::chrono::microseconds>(qry_stop-qry_start);
+      auto query_time = std::chrono::duration_cast<std::chrono::microseconds>(
+          qry_stop - qry_start);
       std::cerr << " TIME = " << std::setprecision(5)
                 << query_time.count() / 1000.0 << " ms\r";
-
-      if (args.num_runs < 3 || i > 0) {
-        auto itr = query_times.find(id);
-        if(itr != query_times.end()) {
-          itr->second += query_time;
-        } else {
-          query_times[id] = query_time;
-        }
-      }
 
       if(i==0) {
         query_results[id] = results;
         query_lengths[id] = qry_tokens.size();
+        query_times[id] = query_time;
         query_stats[id] = stat;
         rewritten_queries[id] = query.query_str;
+      } else {
+        if (query_time < query_times[id])
+          query_times[id] = query_time;
       }
     }
     std::cerr << "\n";
@@ -292,11 +281,6 @@ main (int argc,char* const argv[])
                        + args.traversal_string + "-" // OR, AND, etc
                        + std::to_string(args.k) + "-" // no. results
                        + std::to_string(args.F_boost);
-
-  // Average the times
-  for(auto& timing : query_times) {
-    timing.second = timing.second / avg_num_run;
-  }
 
   std::string time_file = args.output_prefix + "-time.log";
 

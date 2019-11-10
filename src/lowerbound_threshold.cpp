@@ -8,13 +8,14 @@
 bool subset_max_exists(const std::vector<std::string>& subsets,
                        double& max_threshold, const cache_t& cache) {
   bool exists = false;
+  cache_t::const_iterator end = cache.end();
 
   for (const auto& s : subsets) {
-    bool in_cache = cache.find(s) != cache.end();
+    cache_t::const_iterator found = cache.find(s);
 
-    if (in_cache) {
+    if (found != end) {
       exists = true;
-      double threshold = cache.at(s);
+      double threshold = found->second;
       if (threshold > max_threshold)
         max_threshold = threshold;
     }

@@ -30,7 +30,7 @@ with open(args.trec_file) as tf, open(args.query_file) as qf:
 
         q_count += 1
         query_id, query = qf_line.rstrip().split(';')
-        score = 0
+        score = 0.0
 
         while True:
             if trec_tokens is None:
@@ -44,11 +44,11 @@ with open(args.trec_file) as tf, open(args.query_file) as qf:
             rank = int(trec_tokens[3])
 
             if rank == args.top_k:
-                score = int(trec_tokens[4])
+                score = float(trec_tokens[4])
 
             trec_tokens = None
 
-        if score > 0:
+        if score > 0.0:
             query_threshold[query] = score
 
 with open(args.out_file, "w") as of:
