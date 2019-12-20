@@ -219,7 +219,7 @@ main (int argc,char* const argv[])
   std::cout << "Index loaded in " << load_time_sec.count() << " seconds." << std::endl;
 
   /* process the queries */
-  std::map<uint64_t,std::chrono::microseconds> query_times;
+  std::map<uint64_t,std::vector<std::chrono::microseconds>> query_times;
   std::map<uint64_t,result> query_results;
   std::map<uint64_t,uint64_t> query_lengths;
   std::map<uint64_t, std::string> rewritten_queries;
@@ -256,16 +256,14 @@ main (int argc,char* const argv[])
       std::cerr << " TIME = " << std::setprecision(5)
                 << query_time.count() / 1000.0 << " ms\r";
 
-      if(i==0) {
+      if (i == 0) {
         query_results[id] = results;
         query_lengths[id] = qry_tokens.size();
-        query_times[id] = query_time;
         query_stats[id] = stat;
         rewritten_queries[id] = query.query_str;
-      } else {
-        if (query_time < query_times[id])
-          query_times[id] = query_time;
       }
+
+      query_times[id].push_back(query_time);
     }
     std::cerr << "\n";
   }
@@ -287,13 +285,17 @@ main (int argc,char* const argv[])
   /* output */
   std::cout << "Writing timing results to '" << time_file << "'" << std::endl;
   std::ofstream resfs(time_file);
-  if(resfs.is_open()) {
+  if (resfs.is_open()) {
     resfs << "query;num_results;postings_eval;docs_fully_eval;"
-        "docs_added_to_heap;threshold;num_terms;time_ms;traversal_type;"
-        "cache_hit;low_threshold;act_threshold" << std::endl;
-    for(const auto& timing: query_times) {
+        "docs_added_to_heap;threshold;num_terms;";
+    for (size_t i = 0; i < args.num_runs; ++i)
+      resfs << "time_ms" << i << ";";
+
+    resfs << "traversal_type;cache_hit;low_threshold;act_threshold" <<
+        std::endl;
+    for (const auto& timing: query_times) {
       auto qry_id = timing.first;
-      auto qry_time = timing.second;
+      std::vector<std::chrono::microseconds> qry_times = timing.second;
       auto results = query_results[qry_id];
       query_stat stat = query_stats[qry_id];
       resfs << qry_id << ";" << results.list.size() << ";"
@@ -301,13 +303,14 @@ main (int argc,char* const argv[])
             << results.docs_fully_evaluated << ";"
             << results.docs_added_to_heap << ";"
             << results.final_threshold << ";"
-            << query_lengths[qry_id] << ";"
-            << qry_time.count() / 1000.0 << ";"
-            << args.traversal_string << ";"
+            << query_lengths[qry_id] << ";";
+      for (auto qt : qry_times)
+        resfs << qt.count() / 1000.0 << ";";
+
+      resfs << args.traversal_string << ";"
             << stat.cache_hit << ";"
             << stat.lowerbound_threshold << ";"
-            << stat.actual_threshold << ";"
-            << std::endl;
+            << stat.actual_threshold << std::endl;
     }
   } else {
     perror ("Could not output results to file.");
