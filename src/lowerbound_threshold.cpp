@@ -5,6 +5,8 @@
 #include <vector>
 #include "lowerbound_threshold.hpp"
 
+using bys_term_score = std::pair<query_token, double>;
+
 bool subset_max_exists(const std::vector<std::string>& subsets,
                        double& max_threshold, const cache_t& cache) {
   bool exists = false;
@@ -150,15 +152,10 @@ double hr4_threshold_old(const query_t& query, const cache_t& cache) {
   return 0.0;
 }
 
-double bayes_threshold(const query_t& query, const cache_t& cache) {
-  using term_score = std::pair<query_token, std::uint64_t>;
-  std::vector<term_score> t_scores;
-
-  // We need to compute normalized doc-freq and term-freq in cache
-  for (auto& t : query.tokens)
-    t_scores.push_back(std::make_pair(t, cache.FreqOf(t.token_str) * t.df));
-
-  auto bys_sort = [&](const term_score& x, const term_score& y) -> bool {
+double bayes(std::vector<bys_term_score>& t_scores,
+             const cache_t& cache) {
+  auto bys_sort = [&](const bys_term_score& x, const bys_term_score& y)
+                  -> bool {
                     return x.second > y.second;
                   };
 
@@ -190,6 +187,29 @@ double bayes_threshold(const query_t& query, const cache_t& cache) {
   } while (ss_end);
 
   return 0.0;
+}
+
+double bayes_threshold(const query_t& query, const cache_t& cache) {
+  std::vector<bys_term_score> t_scores;
+
+  // We need to compute normalized doc-freq and term-freq in cache
+  for (auto& t : query.tokens)
+    t_scores.push_back(std::make_pair(t, cache.FreqOf(t.token_str) * t.df));
+
+  return bayes(t_scores, cache);
+}
+
+double bayes_ts_threshold(const query_t& query, const cache_t& cache,
+                          const cache_t& term_cache) {
+  double ts = ts_threshold(query, cache, term_cache);
+  std::vector<bys_term_score> t_scores;
+  for (auto& t: query.tokens) {
+    std::uint32_t cache_f = cache.FreqOf(t.token_str);
+    double tf = term_cache.ScoreOf(t.token_str);
+    t_scores.push_back(std::make_pair(t, cache_f * tf * t.df));
+  }
+
+  return std::max(ts, bayes(t_scores, cache));
 }
 
 double hr4_threshold(const query_t& query, const cache_t& cache) {

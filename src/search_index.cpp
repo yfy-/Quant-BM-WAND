@@ -46,7 +46,7 @@ void print_usage(std::string program) {
             << " -d <cache dynamically>"
             << " -r <only report time logs>"
             << " -n <number of runs>"
-            << " -m <threshold method: HR1|HR2|HR3|HR4|ALL|TS|HR1_TS|HR2_TS|BAYES, default is NAIVE>"
+            << " -m <threshold method: HR1|HR2|HR3|HR4|ALL|TS|HR1_TS|HR2_TS|BAYES|BAYES_TS, default is NAIVE>"
             << " -e <term static cache file>"
             << std::endl;
   exit(EXIT_FAILURE);

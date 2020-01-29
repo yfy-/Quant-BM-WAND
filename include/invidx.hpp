@@ -162,6 +162,8 @@ public:
       lowerbound_threshold_term = &hr2_ts_threshold;
     else if (method == "BAYES")
       lowerbound_threshold = &bayes_threshold;
+    else if (method == "BAYES_TS")
+      lowerbound_threshold_term = &bayes_ts_threshold;
     else
       lowerbound_threshold = &naive_threshold;
   }

@@ -35,6 +35,7 @@ double hr4_threshold(const query_t& query, const cache_t& cache);
 
 double bayes_threshold(const query_t& query, const cache_t& cache);
 
+
 double all_threshold(const query_t& query, const cache_t& cache);
 
 double ts_threshold(const query_t& query, const cache_t& cache,
@@ -49,5 +50,8 @@ double hr1_ts_threshold(const query_t& query, const cache_t& cache,
 
 double hr2_ts_threshold(const query_t& query, const cache_t& cache,
                         const cache_t& term_cache);
+
+double bayes_ts_threshold(const query_t& query, const cache_t& cache,
+                          const cache_t& term_cache);
 
 #endif  // LOWERBOUND_THRESHOLD_HPP
