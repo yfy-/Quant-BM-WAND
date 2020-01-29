@@ -8,14 +8,10 @@
 bool subset_max_exists(const std::vector<std::string>& subsets,
                        double& max_threshold, const cache_t& cache) {
   bool exists = false;
-  cache_t::const_iterator end = cache.end();
 
   for (const auto& s : subsets) {
-    cache_t::const_iterator found = cache.find(s);
-
-    if (found != end) {
+    if (double threshold = cache.ScoreOf(s)) {
       exists = true;
-      double threshold = found->second;
       if (threshold > max_threshold)
         max_threshold = threshold;
     }
@@ -147,9 +143,51 @@ double hr4_threshold_old(const query_t& query, const cache_t& cache) {
     for (int j = 1; j < sub_tokens.size(); j++)
       subset += " " + sub_tokens[j].token_str;
 
-    if (cache.find(subset) != cache.end())
-      return cache.at(subset);
+    if (double t = cache.ScoreOf(subset))
+      return t;
   }
+
+  return 0.0;
+}
+
+double bayes_threshold(const query_t& query, const cache_t& cache) {
+  using term_score = std::pair<query_token, std::uint64_t>;
+  std::vector<term_score> t_scores;
+
+  // We need to compute normalized doc-freq and term-freq in cache
+  for (auto& t : query.tokens)
+    t_scores.push_back(std::make_pair(t, cache.FreqOf(t.token_str) * t.df));
+
+  auto bys_sort = [&](const term_score& x, const term_score& y) -> bool {
+                    return x.second > y.second;
+                  };
+
+  std::sort(t_scores.begin(), t_scores.end(), bys_sort);
+  auto ss_end = t_scores.size() - 1;
+  std::vector<std::string> s_terms;
+  for (int i = 0; i < ss_end; ++i) {
+    if (t_scores[i].second)
+      s_terms.push_back(t_scores[i].first.token_str);
+    else
+      ss_end = i;
+  }
+
+  if (!s_terms.size())
+    return 0.0;
+
+  do {
+    auto start = s_terms.begin();
+    std::vector<std::string> s_terms_srt(start, start + ss_end);
+    std::sort(s_terms_srt.begin(), s_terms_srt.end());
+    std::string subset = s_terms_srt[0];
+    for (auto s = s_terms_srt.begin() + 1, e = s_terms_srt.end(); s != e; ++s)
+      subset += " " + *s;
+
+    if (double t = cache.ScoreOf(subset))
+      return t;
+
+    ss_end--;
+  } while (ss_end);
 
   return 0.0;
 }

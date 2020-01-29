@@ -63,7 +63,7 @@ private:
         size_t delim_pos = cache_line.find(";");
         std::string query = cache_line.substr(0, delim_pos);
         double threshold = std::stod(cache_line.substr(delim_pos + 1));
-        load_cache[query] = threshold;
+        load_cache.Insert(query, threshold);
       }
     } else {
       std::cerr << "Cannot load cache with file " << cache_file << "\n";
@@ -140,7 +140,7 @@ public:
   }
 
   void reset_cache() {
-    cache.clear();
+    cache.Clear();
   }
 
   void set_threshold_method(const std::string& method) {
@@ -160,6 +160,8 @@ public:
       lowerbound_threshold_term = &hr1_ts_threshold;
     else if (method == "HR2_TS")
       lowerbound_threshold_term = &hr2_ts_threshold;
+    else if (method == "BAYES")
+      lowerbound_threshold = &bayes_threshold;
     else
       lowerbound_threshold = &naive_threshold;
   }
@@ -661,7 +663,7 @@ public:
     }
 
     if (dyn_cache)
-      cache[query.query_str] = threshold;
+      cache.Insert(query.query_str, threshold);
 
     stat.actual_threshold = threshold;
 
@@ -752,7 +754,7 @@ public:
     }
 
     if (t_index_traversal == OR) {
-      if (cache.find(qry.query_str) != cache.end()) {
+      if (cache.ScoreOf(qry.query_str)) {
         cache_hit++;
         stat.cache_hit = true;
         return result();

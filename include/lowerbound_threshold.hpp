@@ -3,8 +3,9 @@
 
 #include <unordered_map>
 #include "query.hpp"
+#include "score_cache.hpp"
 
-typedef std::unordered_map<std::string, double> cache_t;
+typedef ScoreCache cache_t;
 
 // Naive threshold, always return 0
 double naive_threshold(const query_t& query, const cache_t& cache);
@@ -31,6 +32,8 @@ double hr3_threshold(const query_t& query, const cache_t& cache);
  * generated subsets
  */
 double hr4_threshold(const query_t& query, const cache_t& cache);
+
+double bayes_threshold(const query_t& query, const cache_t& cache);
 
 double all_threshold(const query_t& query, const cache_t& cache);
 

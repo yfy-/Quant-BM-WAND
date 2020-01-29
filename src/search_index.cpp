@@ -46,7 +46,7 @@ void print_usage(std::string program) {
             << " -d <cache dynamically>"
             << " -r <only report time logs>"
             << " -n <number of runs>"
-            << " -m <threshold method: HR1|HR2|HR3|HR4|ALL|TS|HR1_TS|HR2_TS, default is NAIVE>"
+            << " -m <threshold method: HR1|HR2|HR3|HR4|ALL|TS|HR1_TS|HR2_TS|BAYES, default is NAIVE>"
             << " -e <term static cache file>"
             << std::endl;
   exit(EXIT_FAILURE);
@@ -191,12 +191,13 @@ main (int argc,char* const argv[])
   // Prepare Ranker
   uint64_t temp;
 
-  std::vector<uint64_t>doc_lens;
+  std::vector<uint64_t> doc_lens;
   ifstream doclen_file(args.doclen_file);
   if(!doclen_file.is_open()){
     std::cerr << "Couldn't open: " << args.doclen_file << std::endl;
     exit(EXIT_FAILURE);
   }
+
   std::cout << "Reading document lengths." << std::endl;
   /*Read the lengths of each document from asc file into vector*/
   while(doclen_file >> temp){
@@ -225,11 +226,10 @@ main (int argc,char* const argv[])
   std::map<uint64_t, std::string> rewritten_queries;
   std::map<uint64_t, query_stat> query_stats;
 
-
   if (args.term_cache_file != "")
     index.load_term_cache(args.term_cache_file);
 
-  for(size_t i = 0; i < args.num_runs; i++) {
+  for (size_t i = 0; i < args.num_runs; i++) {
     if (args.cache_file != "") {
       std::cout << "Loading static cache with " << args.cache_file << "\n";
       index.reset_cache();
@@ -328,7 +328,6 @@ main (int argc,char* const argv[])
     id_mapping[j] = name_mapping;
     j++;
   }
-
 
   if (!args.report_only_time) {
     std::string trec_file = args.output_prefix + "-trec.run";
