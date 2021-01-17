@@ -755,15 +755,15 @@ public:
       ++j;
     }
 
-    if (t_index_traversal == OR) {
-      if (cache.ScoreOf(qry.query_str)) {
-        cache_hit++;
-        stat.cache_hit = true;
-        return result();
-      } else {
-        cache_miss++;
-      }
-    }
+    // if (t_index_traversal == OR) {
+    //   if (cache.ScoreOf(qry.query_str)) {
+    //     cache_hit++;
+    //     stat.cache_hit = true;
+    //     return result();
+    //   } else {
+    //     cache_miss++;
+    //   }
+    // }
 
     // Select and run query
     // Disable conjunctive processing temporarily

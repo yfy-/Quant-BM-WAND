@@ -1,3 +1,4 @@
+#include <iostream>
 #include <string>
 #include <algorithm>
 #include <numeric>
@@ -98,6 +99,12 @@ double hr2_threshold(const query_t& query, const cache_t& cache) {
   std::vector<query_token> tokens = query.tokens;
   int len_tokens = tokens.size();
   std::vector<std::string> subsets;
+
+  if ((threshold = cache.ScoreOf(query.query_str)) > 0.0) {
+    return threshold;
+  }
+
+  std::cerr << "Cannot find " << query.query_str << " exactly in score cache\n";
 
   if (len_tokens > 3) {
     std::vector<std::string> subsets3 = gen_subsets(tokens, 3);
